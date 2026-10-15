@@ -62,8 +62,10 @@ selectable with an environment variable.
 | `bash scripts/build.sh` | WebGL 1 | Emscripten's `LEGACY_GL_EMULATION` translates the GL 1.1 calls |
 | `XOPS_RENDERER=webgpu bash scripts/build.sh` | WebGPU | `port/gl-webgpu.cpp` implements the GL 1.1 subset the renderer uses on top of a small WebGPU core, `port/webgpu-core.cpp` |
 
-Both reach the same picture at the same camera position; the WebGPU one is the
-groundwork for the native (Rust) renderer, which is cross-checked against it.
+Both reach the same picture at the same camera position. `renderer/` holds the
+same renderer written a second time in Rust on top of `wgpu`, fed the draw stream
+the WebGPU build records (`?record=N`), so the pair can be run on identical input
+and compared; see `renderer/README.md`.
 `XOPS_TRACE_DRAWS=1` turns on the draw-level tracing both of them share, and
 appending `?only=N` to the page URL draws just the Nth draw of each frame, which
 is how a draw that never appears gets narrowed down.
