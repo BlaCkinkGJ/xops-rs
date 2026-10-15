@@ -8,3 +8,5 @@ web/openxops.worker.js
 build/
 *.log
 renderer/target/
+__pycache__/
+*.pyc
