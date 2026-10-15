@@ -7,3 +7,4 @@ web/openxops.data
 web/openxops.worker.js
 build/
 *.log
+renderer/target/
