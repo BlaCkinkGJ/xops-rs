@@ -59,10 +59,14 @@ never happened".
   then calls `D3DGraphics::ResetZbuffer()` so the sky cannot occlude the level.
   Ignoring that clear (only the frame-opening one was handled) left the sky's
   depth in place and hid everything behind it.
-- **GL decides winding in window coordinates (y up), WebGPU in framebuffer
-  coordinates (y down), so `glFrontFace` maps to the opposite `frontFace`.** The
-  game flips to `GL_CW` for the map strip and relies on culling; get this
-  backwards and the map disappears while the sky survives.
+- **`glFrontFace` maps straight through to `frontFace`, and it looks like it
+  should not.** The usual argument is that GL winds in window coordinates (y up)
+  and WebGPU in framebuffer coordinates (y down), so the same triangle reads as
+  the opposite winding. It does not happen here: both put NDC +y at the top of
+  the target, so the handedness is already the same, and the shader's only
+  coordinate change is the depth remap on z. Invert it anyway and the map strip,
+  which the game draws as `GL_CW` and culls, disappears while the sky survives -
+  which is how the mistake was caught, by rendering, not by argument.
 - **Never change the GL texture binding behind the renderer's back.** It caches
   the id it last bound and skips redundant binds, so an upload that leaves its
   own texture bound makes later draws sample it (`port/font-web.cpp` saves and
