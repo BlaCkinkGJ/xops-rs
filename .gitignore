@@ -1,0 +1,9 @@
+.emsdk/
+web/data/
+web/config.dat
+web/openxops.js
+web/openxops.wasm
+web/openxops.data
+web/openxops.worker.js
+build/
+*.log
