@@ -49,8 +49,24 @@ flowchart TB
 
 Upstream data formats needed no work at all: `.bd1` blocks, `.pd1` points, `.mif`
 missions, `.dds`/`.bmp` textures and `.wav` sounds are parsed by the original
-`datafile.cpp` and texture loaders. `port/glu.cpp` supplies the three GLU entry
-points Emscripten does not ship.
+`datafile.cpp` and texture loaders. `port/glu.cpp` supplies the GLU entry points
+Emscripten does not ship (`gluPerspective`, `gluLookAt`, `gluUnProject`).
+
+## Renderers
+
+`scripts/build.sh` builds one of two backends for the same game code; the pair is
+selectable with an environment variable.
+
+| Command | Backend | How it works |
+| --- | --- | --- |
+| `bash scripts/build.sh` | WebGL 1 | Emscripten's `LEGACY_GL_EMULATION` translates the GL 1.1 calls |
+| `XOPS_RENDERER=webgpu bash scripts/build.sh` | WebGPU | `port/gl-webgpu.cpp` implements the GL 1.1 subset the renderer uses on top of a small WebGPU core, `port/webgpu-core.cpp` |
+
+Both reach the same picture at the same camera position; the WebGPU one is the
+groundwork for the native (Rust) renderer, which is cross-checked against it.
+`XOPS_TRACE_DRAWS=1` turns on the draw-level tracing both of them share, and
+appending `?only=N` to the page URL draws just the Nth draw of each frame, which
+is how a draw that never appears gets narrowed down.
 
 ## Build
 
