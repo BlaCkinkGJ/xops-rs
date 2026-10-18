@@ -98,3 +98,15 @@ the two disagree.
 - **The camera angle that looks like it should be negative is not.** `rx` in the
   debug overlay is positive, and reading that glyph as a minus cost a detour.
   When a matrix is available, compare against the matrix.
+
+- **`std::thread::sleep` does not last what it is asked for on macOS.** The system
+  coalesces timers, so a request for 30 ms came back after 80 and the game paced
+  itself at a third of its rate. `host::sleep_millis` sleeps in small steps and
+  re-reads the clock, which keeps the total honest. Anything that waits for a
+  fraction of a frame goes through it.
+- **Movement must not be read from the cursor's position.** The game warps the
+  cursor to the middle of the window every frame and reads how far it went, so the
+  warp itself is a move: the player's `+m` and the warp's `−m` cancel and the view
+  cannot move at all. The raw device events carry the mouse's own motion and no warp
+  produces them, which is why the movement comes from there. The cursor's position is
+  still tracked, because the menus read that instead.
