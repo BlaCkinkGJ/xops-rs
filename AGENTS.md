@@ -133,3 +133,13 @@ the two disagree.
   re-associates the pointer with the cursor, cancelling the hold it depends on;
   and the movement must be read from those deltas, never from the cursor's
   position, because the warp is itself a move.
+
+- **Exactly one thing paces the frame.** The game's own frame rate control sleeps
+  out the rest of each 30 ms frame, and the host waits until the next frame is
+  due. Running both sleeps out two frames for every one and the game runs at two
+  thirds of its rate -- which is what "the frame rate is too low" looked like
+  here, with a step of 20 ms and a host wait of 15 ms in the same frame. The
+  windowed host paces (`WaitUntil`), so its `step` call says so and the game's own
+  control does not run; the offscreen run has no host, so there it does. The host
+  must not poll instead: polling with the game's control disabled is a busy loop
+  that runs the loop a hundred thousand times a second between frames.

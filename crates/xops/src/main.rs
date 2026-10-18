@@ -125,11 +125,17 @@ impl Game {
 
 	/// One pass of the upstream loop: the screen's phase, then the frame rate control.
 	///
+	/// `host_paces` says that something outside this frame is already keeping the frame rate.
+	/// The windowed host is, and then the upstream frame rate control must not run: it sleeps
+	/// out the rest of the frame, and doing that as well as the host's wait sleeps out two
+	/// frames for every one, which runs the game at two thirds of its rate. The offscreen run
+	/// has no host, so there it is the only pacer and it has to run.
+	///
 	/// The two ways the run ends are the loop's own condition, so they are read before the
 	/// frame rather than after it. The state machine reaching `STATE_EXIT` is the game asking
 	/// to stop, and the close flag is a screen whose data did not load asking for the
 	/// `WM_QUIT` that `CloseWindow` posted upstream.
-	fn step(&mut self, input: &mut Input) -> bool {
+	fn step(&mut self, input: &mut Input, host_paces: bool) -> bool {
 		if self.state.get_state() == xops_game::statemachine::State::STATE_EXIT
 			|| self.window.close_requested()
 		{
@@ -153,7 +159,9 @@ impl Game {
 			&mut self.log,
 			self.framecnt,
 		);
-		control_fps();
+		if !host_paces {
+			control_fps();
+		}
 		self.framecnt = self.framecnt.wrapping_add(1);
 		true
 	}
@@ -335,7 +343,7 @@ impl App for Shell {
 			return false;
 		};
 		self.frames += 1;
-		game.step(input)
+		game.step(input, true)
 	}
 
 	fn resized(&mut self, width: u32, height: u32) {
@@ -528,7 +536,7 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 	let mut input = Input::default();
 	let mut rendered = Vec::with_capacity(frames as usize);
 	for _ in 0..frames {
-		if !game.step(&mut input) {
+		if !game.step(&mut input, false) {
 			break;
 		}
 		rendered.push(game.frame_pixels()?);

@@ -209,6 +209,11 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// core and running hundreds of thousands of times a second while the game's frames
 		// themselves are paced by the wait below.
 		self.last_burst_end = Some(Instant::now());
+
+		// The host owns the clock, which is the arrangement this file describes at the top:
+		// the game runs on a fixed step and the frame is drawn once per step, so waiting
+		// until the next one is due is the frame rate control. The game's own one has to know
+		// that and not add a second sleep of its own.
 		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
 }
