@@ -1,18 +1,17 @@
-.emsdk/
-web/data/
-web/config.dat
-web/openxops.js
-web/openxops.wasm
-web/openxops.data
-web/openxops.worker.js
-build/
-*.log
+# The game's data, which is not ours to redistribute, and the configuration the game
+# writes where it runs.
+/data/
+/config.dat
+/config-openxops.ini
+
+# The browser build's output, which scripts/build_web.sh writes beside the data.
+/xops.js
+/xops_bg.wasm
+
 /target/
+vendor/target/
 renderer/target/
 __pycache__/
 *.pyc
-
-# The browser build's own output, which scripts/build_web.sh writes beside the data.
-web/xops.js
-web/xops_bg.wasm
-web/data/index.json
+build/
+*.log

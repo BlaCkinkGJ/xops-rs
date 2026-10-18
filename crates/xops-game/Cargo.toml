@@ -10,3 +10,6 @@ xops-platform.workspace = true
 # The clock: std's is unimplemented on the web and panics, web_time is std's on the
 # desktop and performance.now there.
 web-time.workspace = true
+# Windows names its files in UTF-16, so the game's Shift-JIS path bytes are decoded before
+# the file system sees them. Unix keeps the bytes, and this is not needed there.
+encoding_rs = "0.8.35"

@@ -188,12 +188,29 @@ fn write_cstr(dst: &mut [u8], src: &[u8]) {
 /// a loader here came out of one of the getters on this module, so this is the one place
 /// the conversion lives. `Path` is the only OS-flavoured thing either crate's file layer
 /// touches.
-// ponytail: non-ASCII path bytes do not resolve. Swap the lossy view for `OsStr::from_bytes`
-// on unix (and a codepage conversion on Windows) when the data ships a Japanese file name.
+///
+/// The two platforms want different things. Unix file names are bytes, so the bytes go
+/// straight through and a Japanese name resolves as exactly what the data says. Windows
+/// names its files in UTF-16, so the bytes are decoded first. Both then take the slash,
+/// which is the only separator Unix has.
 pub fn path_from_bytes(fname: &[u8]) -> PathBuf {
 	let name = cstr(fname);
-	// Windows accepts either separator, Unix only the slash.
-	PathBuf::from(String::from_utf8_lossy(name).replace('\\', "/"))
+
+	#[cfg(unix)]
+	{
+		use std::os::unix::ffi::OsStrExt;
+		let bytes: Vec<u8> = name
+			.iter()
+			.map(|&byte| if byte == b'\\' { b'/' } else { byte })
+			.collect();
+		PathBuf::from(std::ffi::OsStr::from_bytes(&bytes))
+	}
+
+	#[cfg(not(unix))]
+	{
+		let (text, _, _) = encoding_rs::SHIFT_JIS.decode(name);
+		PathBuf::from(text.replace('\\', "/"))
+	}
 }
 
 fn read_file(fname: &[u8]) -> Option<Vec<u8>> {

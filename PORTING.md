@@ -7,7 +7,7 @@ that forty translation units written in parallel come out as one program.
 
 | Path | What it is | Replaces |
 | --- | --- | --- |
-| `crates/xops-platform/` | Window, input, audio, the wgpu renderer, math. The only crate that touches the OS or the GPU. | `window.cpp`, `input.cpp`, `sound-ezds.cpp`, `d3dgraphics-opengl.cpp`, `port/` |
+| `crates/xops-platform/` | Window, input, audio, the wgpu renderer, math. The only crate that touches the OS or the GPU. | `window.cpp`, `input.cpp`, `sound-ezds.cpp`, `d3dgraphics-opengl.cpp` |
 | `crates/xops-game/` | The game: data files, collision, AI, objects, missions, menus. No GPU or window types. | `datafile.cpp`, `collision.cpp`, `ai.cpp`, `object.cpp`, `objectmanager.cpp`, `parameter.cpp`, `gamemain.cpp`, `scene.cpp`, `statemachine.cpp`, `event.cpp`, `resource.cpp`, `gui-object.cpp`, `debug.cpp`, `config.cpp`, `main.cpp` |
 | `crates/xops/` | The binary: argument handling, the frame loop host. | `WinMain` in `main.cpp` |
 

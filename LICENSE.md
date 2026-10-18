@@ -10,7 +10,8 @@ OpenXOPS name.
 * `vendor/openxops/` is the OpenXOPS 1.080 source code, with the patches listed in
   `README.md` applied and the Japanese comments translated to English (comments
   only, no code or string literals were touched).
-* `port/`, `scripts/` and `web/` are this port's own platform layer.
+* `crates/`, `xops.html` and `scripts/` are this port's own code, and none of it comes from
+the original.
 
 ## OpenXOPS: 3-clause BSD
 
@@ -59,7 +60,7 @@ marked in the code with `#ifdef __EMSCRIPTEN__` and described in `README.md`.
 
 ## The browser port
 
-`port/`, `scripts/`, `web/index.html`, `web/missions/` and this file are released
+`crates/`, `xops.html`, `scripts/`, `missions/` and this file are released
 under the same 3-clause BSD terms, copyright (c) 2026 BlaCkinkGJ and contributors
 of this port.
 

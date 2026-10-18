@@ -553,13 +553,13 @@ mod tests {
 	/// The real game data. `cargo test` runs a test binary from its package directory, so
 	/// these are relative to the crate root and not to the machine. The map is the
 	/// training map, which is the one the game itself starts on.
-	const MAP_DIR: &[u8] = b"../../web/data/map0/";
-	const MAP_FILE: &[u8] = b"../../web/data/map0/temp.bd1";
+	const MAP_DIR: &[u8] = b"../../data/map0/";
+	const MAP_FILE: &[u8] = b"../../data/map0/temp.bd1";
 	/// One of the block textures that map names, and one it does not.
-	const BMP_TEXTURE: &[u8] = b"../../web/data/map0/kabe.bmp";
-	const OTHER_TEXTURE: &[u8] = b"../../web/data/map0/siba.bmp";
+	const BMP_TEXTURE: &[u8] = b"../../data/map0/kabe.bmp";
+	const OTHER_TEXTURE: &[u8] = b"../../data/map0/siba.bmp";
 	/// A model with three vertices, small enough that the test has to scale it up.
-	const MODEL_FILE: &str = "../../web/data/model/arm00.x";
+	const MODEL_FILE: &str = "../../data/model/arm00.x";
 
 	fn headless() -> D3DGraphics {
 		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
@@ -597,7 +597,7 @@ mod tests {
 		// size in the same order. That is the map renderer agreeing with the browser build
 		// vertex for vertex, which a rendered image could not establish this precisely
 		// because the camera would have to be identical too.
-		if !std::path::Path::new("../../web/data/map0/temp.bd1").is_file() {
+		if !std::path::Path::new("../../data/map0/temp.bd1").is_file() {
 			eprintln!("skipping: the game data is not present");
 			return;
 		}
@@ -705,7 +705,7 @@ mod tests {
 		let mut graphics = headless();
 
 		// No such file: the extension says jpeg, so only the failed read can refuse it.
-		assert_eq!(graphics.load_texture(b"../../web/data/map0/nope.jpg", false, false), -1);
+		assert_eq!(graphics.load_texture(b"../../data/map0/nope.jpg", false, false), -1);
 		// A file whose extension means nothing to the game, whatever its bytes are.
 		assert_eq!(graphics.load_texture(MAP_FILE, false, false), -1);
 		assert_eq!(graphics.get_total_textures(), 0, "a failed load takes no slot");
@@ -736,7 +736,7 @@ mod tests {
 	#[test]
 	fn a_map_whose_textures_are_missing_still_loads() {
 		let mut graphics = headless();
-		graphics.load_mapdata(map_blocks(), b"../../web/data/map0/not_here/");
+		graphics.load_mapdata(map_blocks(), b"../../data/map0/not_here/");
 
 		// The blocks are there and every texture slot failed, which has to stay a
 		// renderable state rather than an error, because a mission with one missing file

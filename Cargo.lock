@@ -2909,6 +2909,7 @@ dependencies = [
 name = "xops-game"
 version = "0.1.0"
 dependencies = [
+ "encoding_rs",
  "web-time",
  "xops-platform",
 ]

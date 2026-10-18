@@ -748,7 +748,7 @@ mod tests {
 		// The game's sound data is not redistributable and is not in git, so this test
 		// reports its reason and passes when it is not on the machine.
 		let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("../../web/data/sound/can.wav");
+			.join("../../data/sound/can.wav");
 		let Ok(data) = crate::fs::read_file(crate::path::resolve_case_insensitive(&path)) else {
 			println!("skipping: {} is not present", path.display());
 			return;
