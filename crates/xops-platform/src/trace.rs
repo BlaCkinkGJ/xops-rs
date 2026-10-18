@@ -68,6 +68,7 @@ struct Counters {
 	warps: u64,
 	warps_skipped: u64,
 	presented: u64,
+	presented_unblended: u64,
 	screen: &'static str,
 	looking: bool,
 	aim_x: f32,
@@ -90,6 +91,7 @@ static TAKEN_DX: AtomicI64 = AtomicI64::new(0);
 static TAKEN_DY: AtomicI64 = AtomicI64::new(0);
 static WARPS: AtomicU64 = AtomicU64::new(0);
 static PRESENTED: AtomicU64 = AtomicU64::new(0);
+static PRESENTED_UNBLENDED: AtomicU64 = AtomicU64::new(0);
 static WARPS_SKIPPED: AtomicU64 = AtomicU64::new(0);
 /// The screen's name, which changes rarely and is only read once a second.
 static SCREEN: Mutex<&'static str> = Mutex::new("none");
@@ -160,6 +162,14 @@ pub fn movement_taken(dx: i32, dy: i32) {
 pub fn presented() {
 	if enabled() {
 		PRESENTED.fetch_add(1, Ordering::Relaxed);
+	}
+}
+
+/// A frame drawn for the display again without being blended, which is the fallback: the
+/// frame did not line up with the one before it.
+pub fn presented_unblended() {
+	if enabled() {
+		PRESENTED_UNBLENDED.fetch_add(1, Ordering::Relaxed);
 	}
 }
 
@@ -236,6 +246,7 @@ fn take() -> Counters {
 		warps: WARPS.swap(0, Ordering::Relaxed),
 		warps_skipped: WARPS_SKIPPED.swap(0, Ordering::Relaxed),
 		presented: PRESENTED.swap(0, Ordering::Relaxed),
+		presented_unblended: PRESENTED_UNBLENDED.swap(0, Ordering::Relaxed),
 		screen: *SCREEN.lock().unwrap_or_else(|error| error.into_inner()),
 		looking: LOOKING.load(Ordering::Relaxed) == 1,
 		aim_x: f32::from_bits(AIM_X.load(Ordering::Relaxed) as u32),
@@ -308,12 +319,13 @@ pub fn report() {
 	let seconds = now.duration_since(start).as_secs_f64();
 
 	eprintln!(
-		"xops: t={:.1}s | {} steps | presented {} | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | wait {:.1}ms x{} | \
+		"xops: t={:.1}s | {} steps | presented {} ({} unblended) | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | wait {:.1}ms x{} | \
 		 mouse: {} motion events delta({},{}) | {} takes delta({},{}) | looking {} | warps {} ({} skipped) | \
 		 aim {:.3},{:.3} | screen {}",
 		seconds,
 		counters.frames,
 		counters.presented,
+		counters.presented_unblended,
 		counters.interval_ms,
 		counters.interval_max_ms,
 		counters.step_ms,

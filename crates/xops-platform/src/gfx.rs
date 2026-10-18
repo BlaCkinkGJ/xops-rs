@@ -692,10 +692,12 @@ impl Gfx {
 	/// rotations it shrinks the result slightly.
 	/// ponytail: linear matrix blend, correct to a tenth of a percent per frame here.
 	/// If the game ever turns faster per frame than it does now, blend the angles instead.
-	pub fn present_between(&mut self, t: f32) -> Result<(), String> {
+	pub fn present_between(&mut self, t: f32) -> Result<bool, String> {
 		if !self.previous_matched || self.uniforms.is_empty() || t <= 0.0 {
-			// Nothing to blend with, or nothing to correct: the frame stands as drawn.
-			return self.encode();
+			// Nothing to blend with -- a frame that drew a different number of things -- or
+			// nothing to correct: the frame stands as drawn.
+			self.encode()?;
+			return Ok(false);
 		}
 		let t = t.clamp(0.0, 1.0);
 
@@ -704,7 +706,8 @@ impl Gfx {
 		if let Some(block) = pack_uniforms(&blended, self.uniform_stride as usize) {
 			self.queue.write_buffer(&self.uniform_buffer, 0, &block);
 		}
-		self.encode()
+		self.encode()?;
+		Ok(true)
 	}
 
 	fn encode(&mut self) -> Result<(), String> {

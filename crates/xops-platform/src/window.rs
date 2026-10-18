@@ -62,9 +62,11 @@ pub trait App {
 	/// Draws the last frame again, partway to the one before it, and presents that.
 	///
 	/// The host asks for this between the game's own steps, so a display can be given a
-	/// frame on every one of its refreshes while the game keeps its own rate. Returning
-	/// false says the app has nothing to show a second time, and then the display is only
-	/// given the game's own frames.
+	/// frame on every one of its refreshes while the game keeps its own rate.
+	///
+	/// The return says whether the frame was blended: false means the frame went out as the
+	/// game drew it, which happens when there is nothing to blend it with. It is what the
+	/// trace counts, so that a fallback is visible rather than silent.
 	fn present_between(&mut self, t: f32) -> bool {
 		let _ = t;
 		false
@@ -250,18 +252,27 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// simulated twice and the game keeps its own speed.
 		let mut next_wake = self.next_frame;
 		if self.interpolating {
-			let now = Instant::now();
-			if now >= self.next_present {
+			// Every refresh that has come due, not one of them: a pass round the loop takes
+			// as long as a step, so one present a pass is one present a step, which is the
+			// frame rate this exists to beat.
+			let mut presented = 0;
+			while Instant::now() >= self.next_present && presented < 4 {
+				let now = Instant::now();
 				let elapsed = now.duration_since(self.last_step_at).as_secs_f64();
 				let t = (elapsed / frame_step().as_secs_f64()) as f32;
 				if self.app.present_between(t) {
 					trace::presented();
+				} else {
+					trace::presented_unblended();
 				}
 				self.next_present += self.refresh();
-				if self.next_present <= now {
-					// A stall must not leave a burst of presents queued up behind it.
-					self.next_present = now + self.refresh();
-				}
+				presented += 1;
+			}
+			let now = Instant::now();
+			if self.next_present <= now {
+				// Fell behind, so start again from here rather than presenting a burst to
+				// catch up with a display that has already moved on.
+				self.next_present = now + self.refresh();
 			}
 			next_wake = next_wake.min(self.next_present);
 		}
