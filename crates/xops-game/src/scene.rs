@@ -30,6 +30,9 @@ use crate::config::Config;
 use crate::d3dgraphics::D3DGraphics;
 use crate::debug::DebugLog;
 use crate::input::{get_esc_keycode, InputControl};
+use crate::parameter::ParameterInfo;
+use crate::resource::ResourceManager;
+use crate::sound::SoundControl;
 use crate::soundmanager::SoundManager;
 use crate::statemachine::StateMachine;
 use crate::window::WindowControl;
@@ -341,8 +344,17 @@ impl D3Dscene {
 
 	/// The upstream `D3Dscene::Sound`, the sound the whole world makes, positioned at the
 	/// camera. Screens that do not override `Sound` get this, and it is called once a frame.
-	pub fn sound(&mut self, game_sound: &mut SoundManager) {
+	pub fn sound(
+		&mut self,
+		game_sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
+		resource: &ResourceManager,
+		param: &ParameterInfo,
+	) {
 		game_sound.play_world_sound(
+			sound_ctrl,
+			resource,
+			param,
 			self.camera_x,
 			self.camera_y,
 			self.camera_z,

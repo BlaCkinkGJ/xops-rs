@@ -114,14 +114,14 @@ pub struct Soundlist {
 /// Sound management class.
 ///
 /// Manages each sound, including its initialization, calculation and playback.
-pub struct SoundManager<'a> {
-	/// sound playback class
-	sound_ctrl: Option<&'a mut SoundControl>,
-	/// resource management class
-	resource: Option<&'a ResourceManager>,
-	/// class that manages the settings values
-	param: Option<&'a ParameterInfo>,
-
+///
+/// Only the cue lists live here. Upstream the class also holds pointers to the sound
+/// control, the resource table and the settings, but those cannot be stored: the caller
+/// that owns the sound control or the resource also owns the world, and one structure
+/// cannot lend the same value to two of its fields. So the state that actually persists
+/// across frames is the two lists and the swap between them, and the three collaborators
+/// arrive at the call that plays a sound.
+pub struct SoundManager {
 	/// sound list A
 	sound_list_a: [Soundlist; MAX_SOUNDMGR_LIST],
 	/// sound list B
@@ -134,46 +134,16 @@ pub struct SoundManager<'a> {
 	list_b_datas: i32,
 }
 
-impl<'a> SoundManager<'a> {
-	/// Constructor. Upstream the three pointers default to NULL and `SetClass` fills them
-	/// in later.
-	pub fn new(
-		in_sound_ctrl: Option<&'a mut SoundControl>,
-		in_resource: Option<&'a ResourceManager>,
-		in_param: Option<&'a ParameterInfo>,
-	) -> SoundManager<'a> {
+impl SoundManager {
+	/// Constructor.
+	pub fn new() -> SoundManager {
 		SoundManager {
-			sound_ctrl: in_sound_ctrl,
-			resource: in_resource,
-			param: in_param,
 			sound_list_a: [Soundlist::default(); MAX_SOUNDMGR_LIST],
 			sound_list_b: [Soundlist::default(); MAX_SOUNDMGR_LIST],
 			change_ab: false,
 			list_a_datas: 0,
 			list_b_datas: 0,
 		}
-	}
-
-	/// `SoundManager::SetClass`.
-	pub fn set_class(
-		&mut self,
-		in_sound_ctrl: Option<&'a mut SoundControl>,
-		in_resource: Option<&'a ResourceManager>,
-		in_param: Option<&'a ParameterInfo>,
-	) {
-		self.sound_ctrl = in_sound_ctrl;
-		self.resource = in_resource;
-		self.param = in_param;
-	}
-
-	/// The sound class the manager was built over.
-	///
-	/// Upstream the asset loaders and the debug console reach the file scope `SoundCtrl`
-	/// directly, and this is that reach: the game screen loads and releases an additional
-	/// small object's sound through the resource class, which needs the control rather
-	/// than the manager, and reports the loaded sound count from it.
-	pub fn sound_ctrl(&mut self) -> Option<&mut SoundControl> {
-		self.sound_ctrl.as_deref_mut()
 	}
 
 	/// `SoundManager::InitWorldSound`: forget everything queued.
@@ -400,6 +370,7 @@ impl<'a> SoundManager<'a> {
 		pos_y: f32,
 		pos_z: f32,
 		team_id: i32,
+		param: &ParameterInfo,
 		psoundlist: &mut [Soundlist],
 	) -> i32 {
 		let getlist = self.get_target_list();
@@ -413,9 +384,8 @@ impl<'a> SoundManager<'a> {
 				SoundmgrID::ShotWeapon | SoundmgrID::ShotWeaponPlayer => {
 					// An unknown weapon id answers with no silencer, where the upstream
 					// would leave `WParam` as the stack held it.
-					let silencer = self
-						.param
-						.and_then(|param| param.get_weapon(getlist[i].dataid))
+					let silencer = param
+						.get_weapon(getlist[i].dataid)
 						.map_or(false, |weapon| weapon.silencer);
 
 					if getlist[i].teamid == team_id {
@@ -511,19 +481,21 @@ impl<'a> SoundManager<'a> {
 	/// Reaches the device, which is the upstream `SoundCtrl->SetVolume(volume)` as called
 	/// from the options screen when the settings are saved.
 	///
-	/// The manager holds the only `&mut SoundControl`, so a screen that has the manager in
-	/// hand routes through it. Upstream the volume is set to zero when the sound flag is
-	/// off and to one when it is on, and the control clamps what it is given.
-	pub fn set_volume(&mut self, volume: f32) {
-		if let Some(sound_ctrl) = self.sound_ctrl.as_mut() {
-			sound_ctrl.set_volume(volume);
-		}
+	/// The control arrives as an argument rather than being held: the screen that saves the
+	/// settings also owns the control, so it hands the control in. Upstream the volume is
+	/// set to zero when the sound flag is off and to one when it is on, and the control
+	/// clamps what it is given.
+	pub fn set_volume(&mut self, sound_ctrl: &mut SoundControl, volume: f32) {
+		sound_ctrl.set_volume(volume);
 	}
 
 	/// `SoundManager::PlayWorldSound`: play the sounds queued for the frame that just
 	/// ended. Called once per frame.
 	pub fn play_world_sound(
 		&mut self,
+		sound_ctrl: &mut SoundControl,
+		resource: &ResourceManager,
+		param: &ParameterInfo,
 		camera_x: f32,
 		camera_y: f32,
 		camera_z: f32,
@@ -540,9 +512,7 @@ impl<'a> SoundManager<'a> {
 			self.change_ab = false;
 		}
 
-		if let Some(sound_ctrl) = self.sound_ctrl.as_mut() {
-			sound_ctrl.set_camera(camera_x, camera_y, camera_z, camera_rx);
-		}
+		sound_ctrl.set_camera(camera_x, camera_y, camera_z, camera_rx);
 
 		let lists = self.get_target_list().len();
 		for i in 0..lists {
@@ -557,7 +527,9 @@ impl<'a> SoundManager<'a> {
 			// If the sound source is within range, try to play it. The upstream mixes the
 			// int constant into this float comparison, which is the same value.
 			if x * x + y * y + z * z < (MAX_SOUNDDIST * MAX_SOUNDDIST) as f32 {
-				self.play_sound(&plist, camera_x, camera_y, camera_z, team_id);
+				self.play_sound(
+					sound_ctrl, resource, param, &plist, camera_x, camera_y, camera_z, team_id,
+				);
 			}
 		}
 	}
@@ -593,6 +565,9 @@ impl<'a> SoundManager<'a> {
 	/// `SoundManager::PlaySound`: decide the conditions for one queued source and play it.
 	fn play_sound(
 		&mut self,
+		sound_ctrl: &mut SoundControl,
+		resource: &ResourceManager,
+		param: &ParameterInfo,
 		plist: &Soundlist,
 		camera_x: f32,
 		camera_y: f32,
@@ -608,25 +583,20 @@ impl<'a> SoundManager<'a> {
 		match plist.paramid {
 			// gunshot sound
 			SoundmgrID::ShotWeapon => {
-				let Some(weapon) = self.param.and_then(|param| param.get_weapon(plist.dataid))
-				else {
+				let Some(weapon) = param.get_weapon(plist.dataid) else {
 					return;
 				};
 				if weapon.soundvolume == 0 {
 					return;
 				}
 
-				let Some(resource) = self.resource else {
-					return;
-				};
 				id = resource.get_weapon_sound(plist.dataid);
 				volume = weapon.soundvolume;
 			}
 
 			// the player's own gunshot sound
 			SoundmgrID::ShotWeaponPlayer => {
-				let Some(weapon) = self.param.and_then(|param| param.get_weapon(plist.dataid))
-				else {
+				let Some(weapon) = param.get_weapon(plist.dataid) else {
 					return;
 				};
 				if weapon.soundvolume == 0 {
@@ -634,22 +604,16 @@ impl<'a> SoundManager<'a> {
 				}
 
 				// Play as is without making it a 3D sound source, then end.
-				if let (Some(sound_ctrl), Some(resource)) = (self.sound_ctrl.as_mut(), self.resource)
-				{
-					sound_ctrl.play_sound(
-						resource.get_weapon_sound(plist.dataid),
-						weapon.soundvolume,
-						0,
-					);
-				}
+				sound_ctrl.play_sound(
+					resource.get_weapon_sound(plist.dataid),
+					weapon.soundvolume,
+					0,
+				);
 				return;
 			}
 
 			// map impact sound
 			SoundmgrID::HitMap => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				// The upstream passes NULL for the four sounds this one does not use.
 				let (hitsound_a, hitsound_b, ..) = resource.get_bullet_sound();
 				id = if get_rand(3) == 0 { hitsound_b } else { hitsound_a };
@@ -661,9 +625,6 @@ impl<'a> SoundManager<'a> {
 			| SoundmgrID::HitHumanUp
 			| SoundmgrID::HitHumanLeg
 			| SoundmgrID::HitHumanZombie => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				let (_, _, human_hitsound, ..) = resource.get_bullet_sound();
 				id = human_hitsound;
 				volume = MAX_SOUNDHITHUMAN;
@@ -671,9 +632,6 @@ impl<'a> SoundManager<'a> {
 
 			// small object destruction sound
 			SoundmgrID::HitSmallobject => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				id = resource.get_small_object_sound(plist.dataid);
 				volume = MAX_SOUNDHITSMALLOBJ;
 			}
@@ -690,27 +648,19 @@ impl<'a> SoundManager<'a> {
 					return;
 				}
 
-				let Some(resource) = self.resource else {
-					return;
-				};
 				let (_, _, _, passing_sound, ..) = resource.get_bullet_sound();
-				if let Some(sound_ctrl) = self.sound_ctrl.as_mut() {
-					sound_ctrl.play_3d_sound(
-						passing_sound,
-						new_x,
-						new_y,
-						new_z,
-						MAX_SOUNDPASSING,
-					);
-				}
+				sound_ctrl.play_3d_sound(
+					passing_sound,
+					new_x,
+					new_y,
+					new_z,
+					MAX_SOUNDPASSING,
+				);
 				return;
 			}
 
 			// grenade bound sound
 			SoundmgrID::GreBound => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				let (.., grenade_cco) = resource.get_bullet_sound();
 				id = grenade_cco;
 				volume = MAX_SOUNDCCOGRENADE;
@@ -718,9 +668,6 @@ impl<'a> SoundManager<'a> {
 
 			// grenade explosion sound
 			SoundmgrID::GreExplosion => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				let (_, _, _, _, grenade_bang, _) = resource.get_bullet_sound();
 				id = grenade_bang;
 				volume = MAX_SOUNDHITGRENADE;
@@ -746,18 +693,13 @@ impl<'a> SoundManager<'a> {
 
 			// reload sound
 			SoundmgrID::WeaponReload => {
-				let Some(resource) = self.resource else {
-					return;
-				};
 				id = resource.get_weapon_sound(-1);
 				volume = 100;
 			}
 		}
 
 		// Play.
-		if let Some(sound_ctrl) = self.sound_ctrl.as_mut() {
-			sound_ctrl.play_3d_sound(id, plist.x, plist.y, plist.z, volume);
-		}
+		sound_ctrl.play_3d_sound(id, plist.x, plist.y, plist.z, volume);
 	}
 }
 
@@ -834,22 +776,24 @@ mod tests {
 
 	static PARAM: ParameterInfo = ParameterInfo;
 
-	/// A sound manager with the parameter table but no device, so the arithmetic can be
-	/// checked without anything being played.
-	fn manager() -> SoundManager<'static> {
-		SoundManager::new(None, None, Some(&PARAM))
+	/// A sound manager holding only the cue lists.
+	fn manager() -> SoundManager {
+		SoundManager::new()
 	}
 
 	/// Swaps the lists the way the end of a frame does, so that what was just queued is
-	/// the list `get_world_sound` reads.
+	/// the list `get_world_sound` reads. A fresh control and resource table stand in,
+	/// because neither is read past the device-less early returns.
 	fn swap(sound: &mut SoundManager) {
-		sound.play_world_sound(0.0, 0.0, 0.0, 0.0, 1);
+		let mut ctrl = SoundControl::new();
+		let resource = ResourceManager::new();
+		sound.play_world_sound(&mut ctrl, &resource, &PARAM, 0.0, 0.0, 0.0, 0.0, 1);
 	}
 
 	/// How many of the queued sources a listener at `distance` along X can hear.
 	fn heard(sound: &SoundManager, distance: f32, team_id: i32) -> i32 {
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		sound.get_world_sound(distance, 0.0, 0.0, team_id, &mut out)
+		sound.get_world_sound(distance, 0.0, 0.0, team_id, &PARAM, &mut out)
 	}
 
 	#[test]
@@ -894,7 +838,7 @@ mod tests {
 		swap(&mut sound);
 
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 1, &mut out), 1);
+		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 1, &PARAM, &mut out), 1);
 		assert_eq!(out[0].paramid, SoundmgrID::ShotWeaponPlayer);
 		assert_eq!(out[0].dataid, WEAPON_MP5);
 	}
@@ -960,12 +904,12 @@ mod tests {
 		// At 34 units: forward carries 40 and sideways 35, but backward only 30, and the
 		// same team's copy is skipped outright.
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(34.0, 0.0, 0.0, 2, &mut out), 2);
+		assert_eq!(sound.get_world_sound(34.0, 0.0, 0.0, 2, &PARAM, &mut out), 2);
 		assert_eq!(out[0].paramid, SoundmgrID::FootstepsForward);
 		assert_eq!(out[1].paramid, SoundmgrID::FootstepsSide);
 
 		// And at 29 units the backward one joins them.
-		assert_eq!(sound.get_world_sound(29.0, 0.0, 0.0, 2, &mut out), 3);
+		assert_eq!(sound.get_world_sound(29.0, 0.0, 0.0, 2, &PARAM, &mut out), 3);
 		assert_eq!(out[1].paramid, SoundmgrID::FootstepsBack);
 	}
 
@@ -1001,7 +945,7 @@ mod tests {
 		swap(&mut sound);
 
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 2, &mut out), 1);
+		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 2, &PARAM, &mut out), 1);
 		assert_eq!(out[0].paramid, SoundmgrID::Bullet);
 		assert_eq!((out[0].x, out[0].y, out[0].z), (0.0, 0.0, 0.0));
 
@@ -1031,7 +975,7 @@ mod tests {
 		assert_eq!(sound.get_total_sound_list(), 1);
 
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(1.0, 0.0, 0.0, 1, &mut out), 1);
+		assert_eq!(sound.get_world_sound(1.0, 0.0, 0.0, 1, &PARAM, &mut out), 1);
 		assert_eq!(out[0].x, 1.0);
 
 		sound.init_world_sound();
@@ -1059,7 +1003,7 @@ mod tests {
 		swap(&mut sound);
 
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 1, &mut out), 4);
+		assert_eq!(sound.get_world_sound(0.0, 0.0, 0.0, 1, &PARAM, &mut out), 4);
 		assert_eq!(out[0].paramid, SoundmgrID::HitHumanHead);
 		assert_eq!(out[1].paramid, SoundmgrID::HitHumanUp);
 		assert_eq!(out[2].paramid, SoundmgrID::HitHumanLeg);

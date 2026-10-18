@@ -63,6 +63,7 @@ use crate::parameter::{
 use crate::resource::MAX_LOADHUMANTEXTURE;
 use crate::scene::D3Dscene;
 use crate::sound::MAX_LOADSOUND;
+use crate::sound::SoundControl;
 use crate::soundmanager::{SoundManager, MAX_SOUNDMGR_LIST};
 use crate::statemachine::StateMachine;
 use crate::window::{get_fps, get_time_ms, get_time_name, WindowControl};
@@ -194,7 +195,7 @@ impl HudaLayout {
 pub struct MainGame<'a> {
 	pub base: D3Dscene,
 	/// The mission, shared with whichever screen is on screen.
-	pub world: World<'a>,
+	pub world: Box<World<'a>>,
 
 	// -- the map and the atmosphere
 	/// `SkyNumber`: which sky the mission set, which also picks the fog colour.
@@ -287,11 +288,11 @@ impl<'a> MainGame<'a> {
 	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
 	/// world cannot be stored beside the world itself, which is exactly what a scheduler
 	/// does. Owning it costs one move per screen change.
-	pub fn into_world(self) -> World<'a> {
+	pub fn into_world(self) -> Box<World<'a>> {
 		self.world
 	}
 
-	pub fn new(world: World<'a>) -> MainGame<'a> {
+	pub fn new(world: Box<World<'a>>) -> MainGame<'a> {
 		MainGame {
 			base: D3Dscene::new(),
 			world,
@@ -442,7 +443,8 @@ impl<'a> MainGame<'a> {
 		input_ctrl: &InputControl,
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
 	) -> i32 {
 		self.main_game_info = self.world.game_info;
 
@@ -497,40 +499,38 @@ impl<'a> MainGame<'a> {
 			let resource = &mut self.world.resource;
 
 			// Load the additional items. The sound is loaded through the resource class,
-			// which is why the manager is here rather than the world.
-			if let Some(sound_ctrl) = sound.sound_ctrl() {
-				for i in 0..MAX_ADDSMALLOBJECT as i32 {
-					let model = self
-						.world
-						.mif
-						.as_ref()
-						.and_then(|m| m.get_add_smallobject_model_path(i))
-						.map(|p| p.to_vec())
-						.unwrap_or_default();
-					let texture = self
-						.world
-						.mif
-						.as_ref()
-						.and_then(|m| m.get_add_smallobject_texture_path(i))
-						.map(|p| p.to_vec())
-						.unwrap_or_default();
-					let soundpath = self
-						.world
-						.mif
-						.as_ref()
-						.and_then(|m| m.get_add_smallobject_sound_path(i))
-						.map(|p| p.to_vec())
-						.unwrap_or_default();
+			// which needs the control rather than the manager.
+			for i in 0..MAX_ADDSMALLOBJECT as i32 {
+				let model = self
+					.world
+					.mif
+					.as_ref()
+					.and_then(|m| m.get_add_smallobject_model_path(i))
+					.map(|p| p.to_vec())
+					.unwrap_or_default();
+				let texture = self
+					.world
+					.mif
+					.as_ref()
+					.and_then(|m| m.get_add_smallobject_texture_path(i))
+					.map(|p| p.to_vec())
+					.unwrap_or_default();
+				let soundpath = self
+					.world
+					.mif
+					.as_ref()
+					.and_then(|m| m.get_add_smallobject_sound_path(i))
+					.map(|p| p.to_vec())
+					.unwrap_or_default();
 
-					resource.load_add_small_object(
-						d3dg,
-						sound_ctrl,
-						i,
-						&model,
-						&texture,
-						&soundpath,
-					);
-				}
+				resource.load_add_small_object(
+					d3dg,
+					sound_ctrl,
+					i,
+					&model,
+					&texture,
+					&soundpath,
+				);
 			}
 
 			// Load the block data and the point data. Point data is the high bit.
@@ -656,40 +656,38 @@ impl<'a> MainGame<'a> {
 	}
 
 	/// The upstream `maingame::Recovery`, called after the renderer was reset.
-	pub fn recovery(&mut self, d3dg: &mut D3DGraphics, sound: &mut SoundManager<'_>) -> i32 {
+	pub fn recovery(&mut self, d3dg: &mut D3DGraphics, sound_ctrl: &mut SoundControl) -> i32 {
 		let directory = self.mission_directory(self.main_game_info.selectmission_id);
 		let resource = &mut self.world.resource;
 
 		// Release and load the additional items.
-		if let Some(sound_ctrl) = sound.sound_ctrl() {
-			for i in 0..MAX_ADDSMALLOBJECT as i32 {
-				resource.cleanup_add_small_object(d3dg, sound_ctrl, i);
-			}
-			for i in 0..MAX_ADDSMALLOBJECT as i32 {
-				let model = self
-					.world
-					.mif
-					.as_ref()
-					.and_then(|m| m.get_add_smallobject_model_path(i))
-					.map(|p| p.to_vec())
-					.unwrap_or_default();
-				let texture = self
-					.world
-					.mif
-					.as_ref()
-					.and_then(|m| m.get_add_smallobject_texture_path(i))
-					.map(|p| p.to_vec())
-					.unwrap_or_default();
-				let soundpath = self
-					.world
-					.mif
-					.as_ref()
-					.and_then(|m| m.get_add_smallobject_sound_path(i))
-					.map(|p| p.to_vec())
-					.unwrap_or_default();
+		for i in 0..MAX_ADDSMALLOBJECT as i32 {
+			resource.cleanup_add_small_object(d3dg, sound_ctrl, i);
+		}
+		for i in 0..MAX_ADDSMALLOBJECT as i32 {
+			let model = self
+				.world
+				.mif
+				.as_ref()
+				.and_then(|m| m.get_add_smallobject_model_path(i))
+				.map(|p| p.to_vec())
+				.unwrap_or_default();
+			let texture = self
+				.world
+				.mif
+				.as_ref()
+				.and_then(|m| m.get_add_smallobject_texture_path(i))
+				.map(|p| p.to_vec())
+				.unwrap_or_default();
+			let soundpath = self
+				.world
+				.mif
+				.as_ref()
+				.and_then(|m| m.get_add_smallobject_sound_path(i))
+				.map(|p| p.to_vec())
+				.unwrap_or_default();
 
-				resource.load_add_small_object(d3dg, sound_ctrl, i, &model, &texture, &soundpath);
-			}
+			resource.load_add_small_object(d3dg, sound_ctrl, i, &model, &texture, &soundpath);
 		}
 
 		// Initialize the block data, the point data and the background sky.
@@ -702,14 +700,14 @@ impl<'a> MainGame<'a> {
 		0
 	}
 
-	/// The upstream `Destroy`. The sound manager is here for the same reason `Recovery`
+	/// The upstream `Destroy`. The sound control is here for the same reason `Recovery`
 	/// takes it: releasing an additional small object's sound needs the sound class.
 	pub fn destroy(
 		&mut self,
 		state: &mut StateMachine,
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound_ctrl: &mut SoundControl,
 	) {
 		let resource = &mut self.world.resource;
 
@@ -718,10 +716,8 @@ impl<'a> MainGame<'a> {
 		self.world.objects.cleanup(d3dg, resource);
 
 		// Release the additional items and the background sky.
-		if let Some(sound_ctrl) = sound.sound_ctrl() {
-			for i in 0..MAX_ADDSMALLOBJECT as i32 {
-				resource.cleanup_add_small_object(d3dg, sound_ctrl, i);
-			}
+		for i in 0..MAX_ADDSMALLOBJECT as i32 {
+			resource.cleanup_add_small_object(d3dg, sound_ctrl, i);
 		}
 		resource.cleanup_sky_model_texture(d3dg);
 
@@ -785,7 +781,7 @@ impl<'a> MainGame<'a> {
 		window: &WindowControl,
 		config: &Config,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
 	) {
 		self.time = get_time_ms() as i32;
 
@@ -880,7 +876,7 @@ impl<'a> MainGame<'a> {
 		input_ctrl: &InputControl,
 		config: &Config,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
 	) {
 		let Some(player_id) = self
 			.world
@@ -1323,7 +1319,8 @@ impl<'a> MainGame<'a> {
 		window: &mut WindowControl,
 		input_ctrl: &mut InputControl,
 		input: &mut Input,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
 	) {
 		self.time = get_time_ms() as i32;
 
@@ -1343,7 +1340,7 @@ impl<'a> MainGame<'a> {
 				mif,
 				resource,
 				..
-			} = &mut self.world;
+			} = &mut *self.world;
 			objects.process(
 				cmd_f5id,
 				false,
@@ -1385,7 +1382,7 @@ impl<'a> MainGame<'a> {
 				collision,
 				resource,
 				..
-			} = &mut self.world;
+			} = &mut *self.world;
 			for i in 0..MAX_HUMAN {
 				if !player_ai && i as i32 == player_id {
 					continue;
@@ -1489,7 +1486,7 @@ impl<'a> MainGame<'a> {
 
 		// The console's main process, while it is up and the mission is still running.
 		if self.show_console && self.end_framecnt == 0 {
-			self.process_console(state, log, d3dg, config, sound, window, input_ctrl, input);
+			self.process_console(state, log, d3dg, config, sound, sound_ctrl, window, input_ctrl, input);
 		}
 
 		self.base.scene.framecnt = self.base.scene.framecnt.wrapping_add(1);
@@ -1596,7 +1593,7 @@ impl<'a> MainGame<'a> {
 
 	/// The upstream `maingame::Sound`: the world's sound, from where the player's camera is
 	/// and for the team the player is on.
-	pub fn sound(&mut self, sound: &mut SoundManager<'_>) {
+	pub fn sound(&mut self, sound: &mut SoundManager, sound_ctrl: &mut SoundControl) {
 		self.time = get_time_ms() as i32;
 
 		let teamid = self
@@ -1607,6 +1604,9 @@ impl<'a> MainGame<'a> {
 			.unwrap_or(0);
 
 		sound.play_world_sound(
+			sound_ctrl,
+			&self.world.resource,
+			&self.world.param,
 			self.base.camera_x,
 			self.base.camera_y,
 			self.base.camera_z,
@@ -2721,7 +2721,7 @@ impl<'a> MainGame<'a> {
 		input_ctrl: &mut InputControl,
 		input: &mut Input,
 		config: &Config,
-		sound: &mut SoundManager<'_>,
+		sound_ctrl: &mut SoundControl,
 		fullscreen: bool,
 	) -> i32 {
 		d3dg.set_fullscreen_flag(fullscreen);
@@ -2732,7 +2732,7 @@ impl<'a> MainGame<'a> {
 			return 1;
 		}
 
-		self.recovery(d3dg, sound);
+		self.recovery(d3dg, sound_ctrl);
 
 		input_ctrl.get_input_state(input, true);
 		input_ctrl.move_mouse_center(window, config);
@@ -2832,7 +2832,8 @@ impl<'a> MainGame<'a> {
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
 		config: &Config,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
 		window: &mut WindowControl,
 		input_ctrl: &mut InputControl,
 		input: &mut Input,
@@ -3389,10 +3390,7 @@ impl<'a> MainGame<'a> {
 			self.add_info_console(white, line.as_bytes());
 
 			self.add_info_console(white, b"[Sound]");
-			let total_sounds = sound
-				.sound_ctrl()
-				.map(|ctrl| ctrl.get_total_sounds())
-				.unwrap_or(0);
+			let total_sounds = sound_ctrl.get_total_sounds();
 			let line = format!(" sound : {:2}/{:2}", total_sounds, MAX_LOADSOUND);
 			self.add_info_console(white, line.as_bytes());
 
@@ -3971,7 +3969,7 @@ impl<'a> MainGame<'a> {
 		if self.command_is(b"window") {
 			let flag = !d3dg.get_fullscreen_flag();
 
-			if self.change_window_mode(d3dg, window, input_ctrl, input, config, sound, flag) != 0 {
+			if self.change_window_mode(d3dg, window, input_ctrl, input, config, sound_ctrl, flag) != 0 {
 				self.add_info_console(white, b"[Error] Change failed.");
 			} else if flag {
 				self.add_info_console(white, b"Changed FullScreen mode.");
@@ -4105,7 +4103,7 @@ mod tests {
 
 	/// A world to build the screen against. The resource has to outlive it, so it is
 	/// declared first; nothing is leaked, the chain lives in the test's own scope.
-	fn world_with_a_resource(resource: &mut ResourceManager) -> World<'_> {
+	fn world_with_a_resource(resource: &mut ResourceManager) -> Box<World<'_>> {
 		World::new(resource)
 	}
 
@@ -4489,7 +4487,8 @@ mod tests {
 	fn a_command_that_is_not_recognised_does_nothing() {
 		let mut d3dg = headless();
 		let config = config();
-		let mut sound = SoundManager::new(None, None, None);
+		let mut sound = SoundManager::new();
+		let mut sound_ctrl = SoundControl::new();
 		let mut window = WindowControl::new();
 		let mut input_ctrl = InputControl::new();
 		let mut input = Input::default();
@@ -4510,6 +4509,7 @@ mod tests {
 			&mut d3dg,
 			&config,
 			&mut sound,
+			&mut sound_ctrl,
 			&mut window,
 			&mut input_ctrl,
 			&mut input,
@@ -4527,6 +4527,7 @@ mod tests {
 			&mut d3dg,
 			&config,
 			&mut sound,
+			&mut sound_ctrl,
 			&mut window,
 			&mut input_ctrl,
 			&mut input,
@@ -4543,6 +4544,7 @@ mod tests {
 			&mut d3dg,
 			&config,
 			&mut sound,
+			&mut sound_ctrl,
 			&mut window,
 			&mut input_ctrl,
 			&mut input,

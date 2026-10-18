@@ -2154,6 +2154,7 @@ impl AIcontrol {
 			self.posy + VIEW_HEIGHT,
 			self.posz,
 			teamid,
+			&self.param,
 			&mut soundlist,
 		);
 
@@ -2266,6 +2267,7 @@ impl AIcontrol {
 			self.posy + VIEW_HEIGHT,
 			self.posz,
 			teamid,
+			&self.param,
 			&mut soundlist,
 		);
 
@@ -2994,8 +2996,8 @@ mod tests {
 	}
 
 	/// A sound manager with no sound class, so every call just queues.
-	fn sound<'a>() -> SoundManager<'a> {
-		SoundManager::new(None, None, None)
+	fn sound() -> SoundManager {
+		SoundManager::new()
 	}
 
 	/// A renderer with no window and no surface, the same shape the object manager's own

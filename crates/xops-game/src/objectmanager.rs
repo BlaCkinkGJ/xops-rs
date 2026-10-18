@@ -1454,14 +1454,14 @@ impl ObjectManager {
 	}
 
 	/// `HitBulletMap`: the smoke puff and the sound of a bullet into a wall.
-	pub fn hit_bullet_map<'a>(
+	pub fn hit_bullet_map(
 		&mut self,
 		x: f32,
 		y: f32,
 		z: f32,
 		team_id: i32,
 		resource: &ResourceManager,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 	) {
 		self.add_effect(
 			x,
@@ -1494,7 +1494,7 @@ impl ObjectManager {
 	/// is the same arithmetic done again for the blood effect, which is the only thing the
 	/// manager's copy of it is used for.
 	#[allow(clippy::too_many_arguments)]
-	pub fn hit_bullet_human<'a>(
+	pub fn hit_bullet_human(
 		&mut self,
 		hit_human_id: usize,
 		hit_id: i32,
@@ -1506,7 +1506,7 @@ impl ObjectManager {
 		shot_human_id: i32,
 		ontargetcnt: f32,
 		resource: &ResourceManager,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 		config: &Config,
 	) {
 		let Some(hit_human) = self.human_index.get(hit_human_id) else {
@@ -1585,7 +1585,7 @@ impl ObjectManager {
 	}
 
 	/// `HitBulletSmallObject`: the damage and the two smoke puffs.
-	pub fn hit_bullet_small_object<'a>(
+	pub fn hit_bullet_small_object(
 		&mut self,
 		hit_small_object_id: usize,
 		x: f32,
@@ -1595,7 +1595,7 @@ impl ObjectManager {
 		team_id: i32,
 		mif: Option<&MIFInterface>,
 		resource: &ResourceManager,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 	) {
 		if !self.small_object_index[hit_small_object_id].object.enable_flag() {
 			return;
@@ -1666,14 +1666,14 @@ impl ObjectManager {
 	/// separately by the map at each. The two are added.
 	///
 	/// Returns whether the blast hit anything.
-	pub fn grenade_explosion<'a>(
+	pub fn grenade_explosion(
 		&mut self,
 		grenade_id: usize,
 		coll: &Collision,
 		block_data_if: &BlockDataInterface,
 		mif: Option<&MIFInterface>,
 		resource: &ResourceManager,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 		config: &Config,
 	) -> bool {
 		let Some(in_grenade) = self.grenade_index.get(grenade_id) else {
@@ -2558,7 +2558,7 @@ impl ObjectManager {
 	/// `ShotWeapon`.
 	///
 	/// Normal bullet fired: 1, grenade fired: 2, failure: 0.
-	pub fn shot_weapon<'a>(&mut self, human_id: i32, sound: &mut SoundManager<'a>) -> i32 {
+	pub fn shot_weapon(&mut self, human_id: i32, sound: &mut SoundManager) -> i32 {
 		if human_id < 0 || MAX_HUMAN as i32 <= human_id {
 			return 0;
 		}
@@ -2867,7 +2867,7 @@ impl ObjectManager {
 	}
 
 	/// `ReloadWeapon`.
-	pub fn reload_weapon<'a>(&mut self, human_id: i32, sound: &mut SoundManager<'a>) -> bool {
+	pub fn reload_weapon(&mut self, human_id: i32, sound: &mut SoundManager) -> bool {
 		if human_id < 0 || MAX_HUMAN as i32 <= human_id {
 			return false;
 		}
@@ -3121,12 +3121,12 @@ impl ObjectManager {
 	}
 
 	/// `HitZombieAttack`: the damage, the blood and the sound of a zombie's claw.
-	pub fn hit_zombie_attack<'a>(
+	pub fn hit_zombie_attack(
 		&mut self,
 		my_human_id: usize,
 		enemy_human_id: usize,
 		resource: &ResourceManager,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 		config: &Config,
 	) {
 		let Some(enemy_human) = self.human_index.get(enemy_human_id) else {
@@ -3343,7 +3343,7 @@ impl ObjectManager {
 	/// Always returns 0, and the order of the passes is the game's: the humans first, so a
 	/// shot fired this frame is a bullet that moves next frame.
 	#[allow(clippy::too_many_arguments)]
-	pub fn process<'a>(
+	pub fn process(
 		&mut self,
 		cmd_f5id: i32,
 		demomode: bool,
@@ -3353,7 +3353,7 @@ impl ObjectManager {
 		coll: &Collision,
 		block_data_if: &BlockDataInterface,
 		mif: Option<&MIFInterface>,
-		sound: &mut SoundManager<'a>,
+		sound: &mut SoundManager,
 		config: &Config,
 	) -> i32 {
 		// This frame's battle record starts empty.
@@ -3723,8 +3723,8 @@ mod tests {
 	}
 
 	/// A sound manager with no sound class, so every call just queues.
-	fn sound<'a>() -> SoundManager<'a> {
-		SoundManager::new(None, None, None)
+	fn sound() -> SoundManager {
+		SoundManager::new()
 	}
 
 	/// The player's settings, with the defaults applied when blood is wanted.

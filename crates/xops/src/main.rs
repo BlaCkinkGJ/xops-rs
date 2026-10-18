@@ -1,192 +1,266 @@
-//! The standalone game.
+//! The standalone game: the opening screen, the menu, a mission, the result.
 //!
-//! Two ways to run it: a window, or a headless pass that renders frames to PNG. The
-//! second exists because the pixel comparison against the browser build needs frames as
-//! files, and because a render difference is easier to find when it is not moving.
+//! The data is not redistributable and is not in this repository, so `--dir` names the
+//! directory the game's own paths are relative to. The game changes into it before
+//! anything loads, the way the original's working directory is its own folder.
 //!
-//! The game data is not redistributable and is not in this repository, so the mission is
-//! named on the command line. The paths inside a mission are relative to the game's own
-//! directory, which is why `--dir` exists: run against a data folder rather than the
-//! repository root.
+//! Two modes, both the original's. With no arguments the game runs from the opening
+//! screen. With `--mission` it starts straight into that mission, which is the upstream
+//! `ENABLE_AUTOLOADMIF` path and the mode a comparison run uses, since it skips the menu
+//! that would otherwise have to be clicked through.
+//!
+//! `--frames` renders offscreen instead of opening a window. That exists because the
+//! pixel comparison against the reference build wants frames as files, and because a
+//! render difference is easier to find when nothing is moving.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use xops_game::datafile::{
-	get_file_directory, path_from_bytes, BlockDataInterface, MIFInterface, PointDataInterface,
-	POINT_P1TYPE_HUMAN,
-};
+use xops_game::config::Config;
+use xops_game::core::{GAMENAME, GAMEVERSION};
 use xops_game::d3dgraphics::D3DGraphics;
-use xops_game::gamemain::{VIEWANGLE_NORMAL, VIEW_HEIGHT};
+use xops_game::debug::DebugLog;
+use xops_game::gamemain::init_game;
+use xops_game::input::InputControl;
+use xops_game::resource::ResourceManager;
+use xops_game::scheduler::{process_screen, Stage};
+use xops_game::sound::SoundControl;
+use xops_game::soundmanager::SoundManager;
+use xops_game::statemachine::StateMachine;
+use xops_game::window::{control_fps, WindowControl};
 use xops_platform::gfx::Gfx;
+use xops_platform::host::HostWindow;
 use xops_platform::input::Input;
 use xops_platform::window::{self, App};
 use xops_platform::winit::event::WindowEvent;
 use xops_platform::winit::window::Window;
 
-/// What the camera needs, read out of the mission when it loads.
-struct Level {
-	camera_x: f32,
-	camera_y: f32,
-	camera_z: f32,
-	camera_rx: f32,
-	camera_ry: f32,
-	sky: i32,
-	wireframe: bool,
+/// The configuration file, the upstream `config.dat`.
+const CONFIG_FILE: &str = "config.dat";
+/// The additional settings file, which only the extended configuration reads.
+const EXT_CONFIG_FILE: &str = "config-openxops.ini";
+
+/// Everything the frame loop owns. Upstream these are file scope values in `main.cpp` and
+/// `gamemain.cpp`, described there as a set of singletons.
+struct Game {
+	stage: Option<Stage<'static>>,
+	sound: SoundManager,
+	sound_ctrl: SoundControl,
+	config: Config,
+	input_ctrl: InputControl,
+	state: StateMachine,
+	d3dg: D3DGraphics,
+	window: WindowControl,
+	log: DebugLog,
+	/// What `ProcessScreen` reads for the frame skip, and nothing else: the screens count
+	/// their own frames.
+	framecnt: u32,
 }
 
-/// The game's own frame. The upstream `GameMain` drives this once it is ported.
+impl Game {
+	/// The upstream `InitGame`: the renderer, the input, the sound, the resource loads and
+	/// the addeons, in that order, because each one's setup is what the next one reads.
+	///
+	/// The mission path is the upstream `mode`. A mission means the briefing and the main
+	/// screen only, started directly at the main screen, with the mission file read here
+	/// rather than by the menu.
+	fn start(
+		config: Config,
+		mut log: DebugLog,
+		mut sound_ctrl: SoundControl,
+		gfx: Gfx,
+		window: WindowControl,
+		mission: Option<&Path>,
+	) -> Result<Game, String> {
+		let mut d3dg = D3DGraphics::new(gfx, config.get_fullscreen_flag(), config.get_language());
+		let mut input_ctrl = InputControl::new();
+		let mut state = StateMachine::new();
+
+		// The resource table is reached by the world through a mutable borrow and outlives
+		// every screen, so it is leaked rather than owned by a structure that would then
+		// hold both it and the world that borrows it. It lives exactly as long as the
+		// process, which is what a leak means here.
+		let resource: &'static mut ResourceManager = Box::leak(Box::new(ResourceManager::new()));
+
+		// The upstream `InitGame`, which reads the texture font, loads the resource, sets
+		// the mouse limit, sets the volume, and then either starts a named mission or
+		// builds the addon list the menu needs.
+		//
+		// The mode is 2, the upstream "main screen only": a mission named on the command
+		// line is read here, and the menu is skipped because nothing would be clicked
+		// through it.
+		let path = mission.map(|path| path.as_os_str().as_encoded_bytes().to_vec());
+		let mode = if path.is_some() { 2 } else { 0 };
+		let world = init_game(
+			&config,
+			&mut d3dg,
+			&mut input_ctrl,
+			&mut sound_ctrl,
+			resource,
+			&mut state,
+			mode,
+			path.as_deref(),
+		)?;
+
+		log.write_log(
+			xops_game::debug::LOG_CHECK,
+			b"Startup",
+			format!("{GAMENAME} {GAMEVERSION}").as_bytes(),
+		);
+
+		Ok(Game {
+			stage: Some(Stage::Idle(world)),
+			sound: SoundManager::new(),
+			sound_ctrl,
+			config,
+			input_ctrl,
+			state,
+			d3dg,
+			window,
+			log,
+			framecnt: 0,
+		})
+	}
+
+	/// One pass of the upstream loop: the screen's phase, then the frame rate control.
+	fn step(&mut self, input: &mut Input) -> bool {
+		if self.state.get_state() == xops_game::statemachine::State::STATE_EXIT {
+			return false;
+		}
+
+		self.input_ctrl.get_input_state(input, false);
+		process_screen(
+			&mut self.stage,
+			&mut self.state,
+			&mut self.window,
+			&mut self.config,
+			&mut self.input_ctrl,
+			input,
+			&mut self.d3dg,
+			&mut self.sound,
+			&mut self.sound_ctrl,
+			&mut self.log,
+			self.framecnt,
+		);
+		control_fps();
+		self.framecnt = self.framecnt.wrapping_add(1);
+		true
+	}
+
+	/// Renders the frame that has been recorded and hands the pixels back, for the
+	/// offscreen mode. The windowed mode presents it instead.
+	fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
+		self.d3dg.gfx_ref().read_frame()
+	}
+}
+
+impl Drop for Game {
+	/// The upstream `CleanupGame`, in its order.
+	fn drop(&mut self) {
+		if let Some(stage) = self.stage.take() {
+			let world = stage.into_world();
+			world
+				.resource
+				.destroy_resource(&mut self.d3dg, &mut self.sound_ctrl);
+		}
+	}
+}
+
+/// The host's application. It holds the game once the window exists, because the renderer
+/// is built from the surface the host creates.
 struct Shell {
-	graphics: Option<D3DGraphics>,
-	level: Option<Level>,
+	config: Config,
+	log: DebugLog,
+	sound_ctrl: SoundControl,
+	window: WindowControl,
 	mission: Option<PathBuf>,
-	camera: Option<(f32, f32, f32, f32, f32)>,
-	wireframe: bool,
+	game: Option<Game>,
 	frames: u64,
 }
 
 impl Shell {
-	fn new(
-		mission: Option<PathBuf>,
-		camera: Option<(f32, f32, f32, f32, f32)>,
-		wireframe: bool,
-	) -> Shell {
+	fn new(mission: Option<PathBuf>) -> Shell {
 		Shell {
-			graphics: None,
-			level: None,
+			config: Config::new(),
+			log: DebugLog::new(),
+			sound_ctrl: SoundControl::new(),
+			window: WindowControl::new(),
 			mission,
-			camera,
-			wireframe,
+			game: None,
 			frames: 0,
 		}
 	}
 
-	fn graphics(&mut self) -> &mut D3DGraphics {
-		self.graphics
-			.as_mut()
-			.expect("the host calls init before it calls frame")
-	}
-
-	/// Loads a mission and its map. Everything the block reader needs comes out of the
-	/// `.mif`, and the block textures are named relative to the map's own directory.
-	fn load_mission(&mut self, path: &Path) -> Result<(), String> {
-		let name = path.to_string_lossy().into_owned();
-
-		let mut mission = MIFInterface::new();
-		if mission.load_file_data(name.as_bytes(), false) != 0 {
-			return Err(format!("{name}: the mission did not load"));
+	/// The upstream preamble: the data directory, the configuration, the sound device and
+	/// the window, in the order the original does them.
+	fn prepare(&mut self, host: HostWindow) -> Result<(), String> {
+		if !Path::new("data").is_dir() {
+			return Err("the data directory is missing. Copy the game data next to here".into());
 		}
 
-		let (blockfile, pointfile) = mission.get_datafile_path();
-		let mut blocks = BlockDataInterface::new();
-		if blocks.load_file_data(blockfile) != 0 {
-			return Err(format!(
-				"{}: the map did not load",
-				path_from_bytes(blockfile).display()
-			));
+		if self.config.load_file(CONFIG_FILE, &mut self.log) == 1 {
+			// The upstream `ENABLE_AUTOCREATECONFIG`: write the defaults out rather than
+			// refuse to start, which is what makes a first run work.
+			self.config.set_default_config();
+			self.config.save_file(CONFIG_FILE, &mut self.log);
 		}
-		// The shading is baked into the block data and has to run before anything draws.
-		blocks.calculation_blockdata(false);
+		self.config.create_ext_config(EXT_CONFIG_FILE, &mut self.log);
+		self.config.load_ext_file(EXT_CONFIG_FILE, &mut self.log);
 
-		let mut directory = [0u8; 260];
-		get_file_directory(blockfile, &mut directory);
-
-		// The player's start: the first point that places a human.
-		let mut points = PointDataInterface::new();
-		let loaded_points = points.load_file_data(pointfile) == 0;
-		let spawn = if loaded_points {
-			points
-				.search_pointdata(0x01, POINT_P1TYPE_HUMAN, 0, 0, 0, 0)
-				.1
-		} else {
-			None
-		};
-
-		let (feet_x, feet_y, feet_z, rx) = match spawn {
-			Some(point) => (point.x, point.y, point.z, point.r),
-			// A map with no spawn point still renders, from the middle of it.
-			None => (0.0, 0.0, 0.0, 0.0),
-		};
-
-		let sky = mission.get_skynumber();
-		let mut level = Level {
-			camera_x: feet_x,
-			camera_y: feet_y + VIEW_HEIGHT,
-			camera_z: feet_z,
-			camera_rx: rx,
-			camera_ry: 0.0,
-			sky,
-			wireframe: self.wireframe,
-		};
-		if let Some((x, y, z, rx, ry)) = self.camera {
-			level.camera_x = x;
-			level.camera_y = y;
-			level.camera_z = z;
-			level.camera_rx = rx;
-			level.camera_ry = ry;
+		if self.sound_ctrl.init_sound() != 0 {
+			return Err("the sound device did not open".into());
 		}
-		self.graphics().load_mapdata(blocks, &directory);
-		self.level = Some(level);
 
-		let (width, height) = self.graphics().gfx_ref().size();
-		eprintln!(
-			"xops: {name}, map {} ({}x{}), sky {sky}, camera at ({feet_x:.1}, {:.1}, {feet_z:.1})",
-			path_from_bytes(blockfile).display(),
-			width,
-			height,
-			feet_y + VIEW_HEIGHT
-		);
+		let fullscreen = self.config.get_fullscreen_flag();
+		if !self
+			.window
+			.init_window(host, &format!("{GAMENAME} {GAMEVERSION}"), fullscreen)
+		{
+			return Err("the window did not initialize".into());
+		}
 		Ok(())
-	}
-
-	/// One frame of the renderer, which is what the game's own loop will do around it.
-	fn draw(&mut self) {
-		let level = self.level.take();
-		let graphics = self.graphics();
-
-		graphics.start_render();
-		if let Some(level) = &level {
-			graphics.set_fog(true, level.sky);
-			graphics.set_camera(
-				level.camera_x,
-				level.camera_y,
-				level.camera_z,
-				level.camera_rx,
-				level.camera_ry,
-				VIEWANGLE_NORMAL,
-			);
-			graphics.render_mapdata(level.wireframe);
-			graphics.set_fog(false, 0);
-		}
-		graphics.end_render();
-		self.level = level;
-		self.frames += 1;
 	}
 }
 
 impl App for Shell {
 	fn init(&mut self, window: &Arc<Window>, gfx: Gfx) {
-		let _ = window.set_title("xops");
-		let (width, height) = gfx.size();
-		eprintln!("xops: {width}x{height}");
-		self.graphics = Some(D3DGraphics::new(gfx, false, 0));
+		if let Err(error) = self.prepare(HostWindow::new(window.clone())) {
+			eprintln!("xops: {error}");
+			std::process::exit(1);
+		}
 
-		if let Some(path) = self.mission.clone() {
-			if let Err(error) = self.load_mission(&path) {
+		let config = std::mem::replace(&mut self.config, Config::new());
+		let log = std::mem::replace(&mut self.log, DebugLog::new());
+		let sound_ctrl = std::mem::replace(&mut self.sound_ctrl, SoundControl::new());
+		let window_control = std::mem::replace(&mut self.window, WindowControl::new());
+		match Game::start(
+			config,
+			log,
+			sound_ctrl,
+			gfx,
+			window_control,
+			self.mission.as_deref(),
+		) {
+			Ok(game) => self.game = Some(game),
+			Err(error) => {
 				eprintln!("xops: {error}");
+				std::process::exit(1);
 			}
 		}
 	}
 
-	fn frame(&mut self, _input: &mut Input) -> bool {
-		self.draw();
-		true
+	fn frame(&mut self, input: &mut Input) -> bool {
+		let Some(game) = self.game.as_mut() else {
+			return false;
+		};
+		self.frames += 1;
+		game.step(input)
 	}
 
 	fn resized(&mut self, width: u32, height: u32) {
-		if let Some(graphics) = &mut self.graphics {
-			graphics.set_size(width as i32, height as i32);
+		if let Some(game) = &mut self.game {
+			game.d3dg.set_size(width as i32, height as i32);
 		}
 	}
 
@@ -204,21 +278,16 @@ impl Drop for Shell {
 }
 
 struct Options {
-	/// Render this many frames headlessly and write them out, instead of opening a window.
+	/// Render this many frames offscreen and write them out, instead of opening a window.
 	frames: Option<u64>,
 	out: Option<PathBuf>,
 	width: u32,
 	height: u32,
-	/// A `.mif` to load. The paths inside it are relative to the game's own directory.
+	/// A `.mif` to start directly in. Its paths are relative to `--dir`.
 	mission: Option<PathBuf>,
-	/// Where the game's data lives. The mission paths are relative to it, so this is the
-	/// directory the binary runs against.
+	/// Where the game's data lives. The game's paths are relative to it, so this is the
+	/// directory the process runs in.
 	dir: Option<PathBuf>,
-	/// `x,y,z,rx,ry` to place the camera at, overriding the mission's spawn point. The
-	/// comparison against the browser build needs both renderers at the same camera, and
-	/// the spawned one is only right once the object layer decides where the player is.
-	camera: Option<(f32, f32, f32, f32, f32)>,
-	wireframe: bool,
 	help: bool,
 }
 
@@ -231,8 +300,6 @@ impl Default for Options {
 			height: 480,
 			mission: None,
 			dir: None,
-			camera: None,
-			wireframe: false,
 			help: false,
 		}
 	}
@@ -270,30 +337,14 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 				let value = args.get(index).ok_or("--dir needs a path")?;
 				options.dir = Some(PathBuf::from(value));
 			}
-			"--camera" => {
-				index += 1;
-				let value = args.get(index).ok_or("--camera needs x,y,z,rx,ry")?;
-				let parts: Vec<&str> = value.split(',').collect();
-				if parts.len() != 5 {
-					return Err("--camera needs x,y,z,rx,ry".into());
-				}
-				let mut values = [0.0f32; 5];
-				for (slot, part) in parts.iter().enumerate() {
-					values[slot] = part
-						.trim()
-						.parse()
-						.map_err(|_| format!("--camera: {part} is not a number"))?;
-				}
-				options.camera = Some((values[0], values[1], values[2], values[3], values[4]));
-			}
-			"--wireframe" => options.wireframe = true,
-			"--help" | "-h" => options.help = true,
-			other => return Err(format!("unknown argument: {other}")),
+			"-h" | "--help" => options.help = true,
+			other => return Err(format!("{other}: unknown option")),
 		}
 		index += 1;
 	}
+
 	if options.frames.is_some() && options.out.is_none() {
-		return Err("--frames needs --out to write the frames somewhere".into());
+		return Err("--frames needs --out".into());
 	}
 	if options.width == 0 || options.height == 0 {
 		return Err("--size must be positive".into());
@@ -304,16 +355,14 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 fn usage() -> &'static str {
 	"xops [options]
 
-  --mission PATH  a .mif to load and render. Its paths are relative to --dir.
-  --dir PATH      the game's data directory, which the mission paths are relative to
-  --camera x,y,z,rx,ry  place the camera here instead of at the mission spawn
-  --wireframe     draw the map as a wireframe
+  --dir PATH      the game's directory, which its own paths are relative to
+  --mission PATH  start straight into this .mif instead of at the opening screen
   --frames N      render N frames offscreen and write them to --out, then exit
   --out DIR       where those frames go
   --size WxH      frame size (default 640x480)
   -h, --help      this text
 
-With no --frames, opens a window and runs the frame loop."
+With no --frames, opens a window and runs the game."
 }
 
 fn main() -> ExitCode {
@@ -331,8 +380,8 @@ fn main() -> ExitCode {
 		return ExitCode::SUCCESS;
 	}
 
-	// The mission's own paths are relative to the game directory, so the game directory
-	// has to be the working directory before anything loads.
+	// The game's own paths are relative to its directory, so that has to be the working
+	// directory before anything loads.
 	if let Some(dir) = &options.dir {
 		if let Err(error) = std::env::set_current_dir(dir) {
 			eprintln!("xops: {}: {error}", dir.display());
@@ -340,10 +389,9 @@ fn main() -> ExitCode {
 		}
 	}
 
-	let mission = options.mission.clone();
 	let result = match options.frames {
 		Some(frames) => headless(&options, frames),
-		None => window::run(Shell::new(mission, options.camera, options.wireframe)),
+		None => window::run(Shell::new(options.mission.clone())),
 	};
 	match result {
 		Ok(()) => ExitCode::SUCCESS,
@@ -354,6 +402,8 @@ fn main() -> ExitCode {
 	}
 }
 
+/// Runs the game with no window. The frames are read back after each pass, which is only
+/// possible offscreen, so this is also the only mode that can show a frame as a file.
 fn headless(options: &Options, frames: u64) -> Result<(), String> {
 	let out = options.out.as_ref().expect("checked in parse_args");
 	let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -361,19 +411,33 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 		..Default::default()
 	});
 	let gfx = Gfx::new(&instance, None, options.width, options.height, None)?;
-	let mut shell = Shell::new(options.mission.clone(), options.camera, options.wireframe);
-	shell.graphics = Some(D3DGraphics::new(gfx, false, 0));
-	if let Some(path) = options.mission.clone() {
-		shell.load_mission(&path)?;
-	}
 
+	let mut shell = Shell::new(options.mission.clone());
+	shell.prepare(HostWindow::default())?;
+
+	let config = std::mem::replace(&mut shell.config, Config::new());
+	let log = std::mem::replace(&mut shell.log, DebugLog::new());
+	let sound_ctrl = std::mem::replace(&mut shell.sound_ctrl, SoundControl::new());
+	let window = std::mem::replace(&mut shell.window, WindowControl::new());
+	let mut game = Game::start(
+		config,
+		log,
+		sound_ctrl,
+		gfx,
+		window,
+		options.mission.as_deref(),
+	)?;
+
+	let mut input = Input::default();
 	let mut rendered = Vec::with_capacity(frames as usize);
 	for _ in 0..frames {
-		shell.draw();
-		rendered.push(shell.graphics().gfx_ref().read_frame()?);
+		if !game.step(&mut input) {
+			break;
+		}
+		rendered.push(game.frame_pixels()?);
 	}
 
-	let (width, height) = shell.graphics().gfx_ref().size();
+	let (width, height) = game.d3dg.gfx_ref().size();
 	let pixels: Vec<Vec<u8>> = rendered.into_iter().map(|(_, _, p)| p).collect();
 	xops_platform::frame::write_frame_sequence(out, "frame", width, height, &pixels)?;
 	println!(

@@ -38,6 +38,7 @@ use crate::input::{get_esc_keycode, originalkeycode_to_dinputdef, InputControl};
 use crate::objectmanager::MAX_HUMAN;
 use crate::parameter::{ParameterInfo, TOTAL_OFFICIALMISSION};
 use crate::scene::D3Dscene;
+use crate::sound::SoundControl;
 use crate::soundmanager::SoundManager;
 use crate::statemachine::StateMachine;
 use crate::window::{get_rand, WindowControl};
@@ -331,7 +332,7 @@ fn draw_link_text(
 pub struct Opening<'a> {
 	base: D3Dscene,
 	/// The mission state this screen works on. The scheduler moves it in and out.
-	pub world: World<'a>,
+	pub world: Box<World<'a>>,
 	add_camera_x: f32,
 	add_camera_y: f32,
 	add_camera_z: f32,
@@ -346,11 +347,11 @@ impl<'a> Opening<'a> {
 	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
 	/// world cannot be stored beside the world itself, which is exactly what a scheduler
 	/// does. Owning it costs one move per screen change.
-	pub fn into_world(self) -> World<'a> {
+	pub fn into_world(self) -> Box<World<'a>> {
 		self.world
 	}
 
-	pub fn new(world: World<'a>) -> Opening<'a> {
+	pub fn new(world: Box<World<'a>>) -> Opening<'a> {
 		Opening {
 			base: D3Dscene::new(),
 			world,
@@ -376,7 +377,7 @@ impl<'a> Opening<'a> {
 		input_ctrl: &InputControl,
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
 	) -> i32 {
 		// The world lends the resource exclusively here, which is what the map load, the
 		// object build and the sky all need. Every other phase only reads it.
@@ -485,7 +486,7 @@ impl<'a> Opening<'a> {
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
 		config: &Config,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
 	) {
 		self.world.objects.process(
 			-1,
@@ -820,8 +821,13 @@ impl<'a> Opening<'a> {
 
 	/// [`D3Dscene::sound`] for this screen, the world sound positioned at the camera. The
 	/// frame runs `Input`, `Process` and then this.
-	pub fn sound(&mut self, game_sound: &mut SoundManager<'_>) {
-		self.base.sound(game_sound);
+	pub fn sound(&mut self, game_sound: &mut SoundManager, sound_ctrl: &mut SoundControl) {
+		self.base.sound(
+			game_sound,
+			sound_ctrl,
+			&self.world.resource,
+			&self.world.param,
+		);
 	}
 
 	/// [`D3Dscene::render_main`] for this screen.
@@ -854,7 +860,7 @@ impl<'a> Opening<'a> {
 pub struct MainMenu<'a> {
 	base: D3Dscene,
 	/// The mission state this screen works on. The scheduler moves it in and out.
-	pub world: World<'a>,
+	pub world: Box<World<'a>>,
 
 	/// The demo map loaded behind the menu.
 	demopath: [u8; MAX_PATH],
@@ -900,11 +906,11 @@ impl<'a> MainMenu<'a> {
 	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
 	/// world cannot be stored beside the world itself, which is exactly what a scheduler
 	/// does. Owning it costs one move per screen change.
-	pub fn into_world(self) -> World<'a> {
+	pub fn into_world(self) -> Box<World<'a>> {
 		self.world
 	}
 
-	pub fn new(world: World<'a>) -> MainMenu<'a> {
+	pub fn new(world: Box<World<'a>>) -> MainMenu<'a> {
 		MainMenu {
 			base: D3Dscene::new(),
 			world,
@@ -937,7 +943,7 @@ impl<'a> MainMenu<'a> {
 		input_ctrl: &InputControl,
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
 	) -> i32 {
 		let resource = &mut self.world.resource;
 
@@ -1344,7 +1350,8 @@ impl<'a> MainMenu<'a> {
 		input_ctrl: &mut InputControl,
 		input: &mut Input,
 		log: &mut DebugLog,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
 	) {
 		self.world.objects.process(
 			-1,
@@ -1383,7 +1390,7 @@ impl<'a> MainMenu<'a> {
 
 		if self.modescreen != 0 && ENABLE_MENUOPTIONS {
 			self.process_options(
-				d3dg, config, window, input_ctrl, input, log, sound,
+				d3dg, config, window, input_ctrl, input, log, sound, sound_ctrl,
 			);
 		}
 
@@ -1400,7 +1407,8 @@ impl<'a> MainMenu<'a> {
 		input_ctrl: &mut InputControl,
 		input: &mut Input,
 		log: &mut DebugLog,
-		sound: &mut SoundManager<'_>,
+		sound: &mut SoundManager,
+		sound_ctrl: &mut SoundControl,
 	) {
 		if self.modescreen != 2 {
 			return;
@@ -1426,7 +1434,7 @@ impl<'a> MainMenu<'a> {
 			}
 
 			let volume = if !config.get_sound_flag() { 0.0 } else { 1.0 };
-			sound.set_volume(volume);
+			sound.set_volume(sound_ctrl, volume);
 
 			// Write the settings file. Upstream reports a failure here by leaving the
 			// commented out call to the error dialog, and carries on either way.
@@ -2297,8 +2305,13 @@ impl<'a> MainMenu<'a> {
 
 	/// [`D3Dscene::sound`] for this screen. The menu is watched from a camera moving over
 	/// the demo world, so the sound is positioned there rather than at the player.
-	pub fn sound(&mut self, game_sound: &mut SoundManager<'_>) {
-		self.base.sound(game_sound);
+	pub fn sound(&mut self, game_sound: &mut SoundManager, sound_ctrl: &mut SoundControl) {
+		self.base.sound(
+			game_sound,
+			sound_ctrl,
+			&self.world.resource,
+			&self.world.param,
+		);
 	}
 
 	/// [`D3Dscene::render_main`] for this screen.
@@ -2377,24 +2390,24 @@ mod tests {
 	///
 	/// The sound manager is built with nothing attached, which is how every test in this
 	/// crate builds one: the phases below only queue into it.
-	struct Frame<'a> {
+	struct Frame {
 		input: Input,
 		input_ctrl: InputControl,
 		state: StateMachine,
 		log: DebugLog,
 		config: Config,
-		sound: SoundManager<'a>,
+		sound: SoundManager,
 	}
 
-	impl<'a> Frame<'a> {
-		fn new() -> Frame<'a> {
+	impl Frame {
+		fn new() -> Frame {
 			Frame {
 				input: Input::default(),
 				input_ctrl: InputControl::new(),
 				state: StateMachine::new(),
 				log: DebugLog::new(),
 				config: config(),
-				sound: SoundManager::new(None, None, None),
+				sound: SoundManager::new(),
 			}
 		}
 
@@ -2842,6 +2855,7 @@ mod tests {
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 		let mut window = WindowControl::new();
+		let mut sound_ctrl = SoundControl::new();
 
 		menu.create_options(&frame.config);
 		menu.modescreen = 2;
@@ -2856,6 +2870,7 @@ mod tests {
 			&mut frame.input,
 			&mut frame.log,
 			&mut frame.sound,
+			&mut sound_ctrl,
 		);
 
 		// Five seconds of frames, and the frame that started it has already counted.
@@ -2875,6 +2890,7 @@ mod tests {
 				&mut frame.input,
 				&mut frame.log,
 				&mut frame.sound,
+				&mut sound_ctrl,
 			);
 			frames += 1;
 		}
@@ -2957,7 +2973,7 @@ mod tests {
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
-		let mut sound = SoundManager::new(None, None, None);
+		let mut sound = SoundManager::new();
 		let config = config();
 		let input_ctrl = InputControl::new();
 		let window = WindowControl::new();
@@ -2991,7 +3007,7 @@ mod tests {
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
-		let mut sound = SoundManager::new(None, None, None);
+		let mut sound = SoundManager::new();
 		let config = config();
 
 		// Where `Create` puts the camera and the count it starts from, which is the state
@@ -3063,7 +3079,7 @@ mod tests {
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
-		let mut sound = SoundManager::new(None, None, None);
+		let mut sound = SoundManager::new();
 		let config = config();
 
 		assert_eq!(16 * (GAMEFPS as u32), 528);

@@ -177,7 +177,7 @@ pub fn init_game<'a>(
 	state: &mut StateMachine,
 	mode: i32,
 	mif_path: Option<&[u8]>,
-) -> Result<World<'a>, String> {
+) -> Result<Box<World<'a>>, String> {
 	if d3dg.init_d3d(TEXTURE_FONT, config.get_language()) != 0 {
 		return Err("the texture font did not load".to_string());
 	}
@@ -293,8 +293,11 @@ pub struct World<'a> {
 impl<'a> World<'a> {
 	/// Builds the mission state. The resource arrives as a mutable borrow because a screen
 	/// loads and unloads mission assets through it.
-	pub fn new(resource: &'a mut ResourceManager) -> World<'a> {
-		World {
+	/// Boxed because the state is large: a screen, and every frame that moves a screen
+	/// about, would otherwise copy it, and a debug build gives each of those copies its own
+	/// stack slot, which runs the stack out.
+	pub fn new(resource: &'a mut ResourceManager) -> Box<World<'a>> {
+		Box::new(World {
 			objects: crate::objectmanager::ObjectManager::new(),
 			// One per human slot, which is what the upstream array holds from the start
 			// rather than growing as humans are added.
@@ -311,7 +314,7 @@ impl<'a> World<'a> {
 			game_info: GameInfo::default(),
 			addon: AddonList::new(),
 			resource,
-		}
+		})
 	}
 }
 

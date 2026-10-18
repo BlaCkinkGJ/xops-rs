@@ -19,6 +19,7 @@ use crate::gamemain::World;
 use crate::gamemenu::{MainMenu, Opening};
 use crate::input::InputControl;
 use crate::maingame::MainGame;
+use crate::sound::SoundControl;
 use crate::soundmanager::SoundManager;
 use crate::statemachine::{State, StateMachine};
 use crate::window::WindowControl;
@@ -32,18 +33,18 @@ use xops_platform::input::Input;
 pub enum Stage<'a> {
 	/// No screen up. A destroy state leaves the world here for the create state that
 	/// follows, which is what makes the state machine's two steps safe.
-	Idle(World<'a>),
+	Idle(Box<World<'a>>),
 	Opening(Opening<'a>),
 	Menu(MainMenu<'a>),
-	Briefing(Briefing, World<'a>),
+	Briefing(Briefing, Box<World<'a>>),
 	MainGame(MainGame<'a>),
-	Result(Result, World<'a>),
+	Result(Result, Box<World<'a>>),
 }
 
 impl<'a> Stage<'a> {
 	/// The world back, so the next screen can have it. Consumes the stage, since the world
 	/// was its only reason to exist.
-	pub fn into_world(self) -> World<'a> {
+	pub fn into_world(self) -> Box<World<'a>> {
 		match self {
 			Stage::Idle(world) => world,
 			Stage::Opening(screen) => screen.into_world(),
@@ -59,7 +60,7 @@ impl<'a> Stage<'a> {
 const STAGE: &str = "the scheduler always holds a stage";
 
 /// The world out of the stage, for a state that is about to build the next screen from it.
-fn take_world<'a>(stage: &mut Option<Stage<'a>>) -> World<'a> {
+fn take_world<'a>(stage: &mut Option<Stage<'a>>) -> Box<World<'a>> {
 	stage.take().expect(STAGE).into_world()
 }
 
@@ -108,7 +109,8 @@ pub fn process_screen<'a>(
 	input_ctrl: &mut InputControl,
 	input: &mut Input,
 	d3dg: &mut D3DGraphics,
-	sound: &mut SoundManager<'_>,
+	sound: &mut SoundManager,
+	sound_ctrl: &mut SoundControl,
 	log: &mut DebugLog,
 	framecnt: u32,
 ) {
@@ -136,7 +138,7 @@ pub fn process_screen<'a>(
 			if let Some(Stage::Opening(screen)) = stage {
 				screen.input(input_ctrl, input, state, log);
 				screen.process(state, log, d3dg, config, sound);
-				screen.sound(sound);
+				screen.sound(sound, sound_ctrl);
 				if draws_this_frame(config, framecnt) && screen.render_main(d3dg, config) {
 					reset_game(&mut screen.world, d3dg);
 					screen.recovery(d3dg);
@@ -171,8 +173,8 @@ pub fn process_screen<'a>(
 		State::STATE_NOW_MENU => {
 			if let Some(Stage::Menu(screen)) = stage {
 				screen.input(input_ctrl, input, state, log, config);
-				screen.process(d3dg, config, window, input_ctrl, input, log, sound);
-				screen.sound(sound);
+				screen.process(d3dg, config, window, input_ctrl, input, log, sound, sound_ctrl);
+				screen.sound(sound, sound_ctrl);
 				if draws_this_frame(config, framecnt) && screen.render_main(d3dg, config) {
 					reset_game(&mut screen.world, d3dg);
 					screen.recovery(d3dg);
@@ -244,7 +246,7 @@ pub fn process_screen<'a>(
 
 		State::STATE_CREATE_MAINGAME => {
 			let mut screen = MainGame::new(take_world(stage));
-			let error = screen.create(state, window, config, input_ctrl, log, d3dg, sound);
+			let error = screen.create(state, window, config, input_ctrl, log, d3dg, sound, sound_ctrl);
 			if error != 0 {
 				if error & 0x0001 != 0 {
 					window.error_info(b"block data open failed");
@@ -262,18 +264,20 @@ pub fn process_screen<'a>(
 				// is where the speed console command takes effect.
 				for _ in 0..screen.get_game_speed() {
 					screen.input(input_ctrl, input, state, log, window, config, d3dg, sound);
-					screen.process(state, log, d3dg, config, window, input_ctrl, input, sound);
-					screen.sound(sound);
+					screen.process(
+						state, log, d3dg, config, window, input_ctrl, input, sound, sound_ctrl,
+					);
+					screen.sound(sound, sound_ctrl);
 				}
 				if draws_this_frame(config, framecnt) && screen.render_main(d3dg, config) {
 					reset_game(&mut screen.world, d3dg);
-					screen.recovery(d3dg, sound);
+					screen.recovery(d3dg, sound_ctrl);
 				}
 			}
 		}
 		State::STATE_DESTROY_MAINGAME => {
 			if let Some(Stage::MainGame(mut screen)) = stage.take() {
-				screen.destroy(state, log, d3dg, sound);
+				screen.destroy(state, log, d3dg, sound_ctrl);
 				*stage = Some(Stage::Idle(screen.into_world()));
 			}
 		}
