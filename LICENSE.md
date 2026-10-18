@@ -54,7 +54,9 @@ That copyright notice, those conditions and that disclaimer apply to this port,
 because this port is a translation of the work they cover: it is a derivative work
 of OpenXOPS 1.080, and the notice is retained for exactly that reason. It appears
 in `LICENSE`, which is the licence this repository is under, with this port's own
-copyright line beside it.
+copyright line beside it. `LICENSE` is the standard text and nothing else, which is
+what lets a tool recognise it; the explanation, the third-party notices and the
+rules that are not part of the licence text itself are here instead.
 
 ## This port
 

@@ -28,8 +28,3 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-The first copyright line is the upstream OpenXOPS Project's, which this port is
-written from and must keep. See LICENSE.md for what that means in full: the
-third-party notices, the rule that the original game's data must not be
-redistributed, and the naming the upstream asks for.
