@@ -30,6 +30,15 @@ pub fn frame_step() -> Duration {
 /// class owns it upstream and the frame is presented by the game's own end-of-frame call
 /// rather than by the host.
 pub trait App {
+	/// The size the window is created at, before [`App::init`] runs.
+	///
+	/// The default is what the original game used. An app whose own screen size has to
+	/// match its window, as this one's does, returns that here rather than resizing after
+	/// the first frame.
+	fn window_size(&self) -> (u32, u32) {
+		(640, 480)
+	}
+
 	/// Called once the window exists. The app takes the renderer from here.
 	fn init(&mut self, window: &Arc<Window>, gfx: Gfx);
 
@@ -63,9 +72,14 @@ impl<A: App> ApplicationHandler for Host<A> {
 			return;
 		}
 
+		// The size the app asks for, fitted to the display it is opening on: a window larger
+		// than the screen cannot be seen, and the largest of the original's resolutions is
+		// taller than a laptop's screen.
+		let (width, height) = self.app.window_size();
+		let (width, height) = fit_to_display(event_loop, width.max(1), height.max(1));
 		let attributes = WindowAttributes::default()
 			.with_title("xops")
-			.with_inner_size(winit::dpi::LogicalSize::new(640.0, 480.0));
+			.with_inner_size(winit::dpi::LogicalSize::new(width, height));
 		let window = match event_loop.create_window(attributes) {
 			Ok(window) => Arc::new(window),
 			Err(error) => {
@@ -159,6 +173,35 @@ impl<A: App> ApplicationHandler for Host<A> {
 
 		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
+}
+
+/// Fits a window size to the display, keeping its shape.
+///
+/// Nothing is done when the display is large enough, which is the usual case. On a screen
+/// smaller than the request the window is scaled down to leave room for the desktop around
+/// it, because a window the size of the screen has no title bar to move it by.
+fn fit_to_display(
+	event_loop: &ActiveEventLoop,
+	width: u32,
+	height: u32,
+) -> (u32, u32) {
+	let Some(monitor) = event_loop.primary_monitor() else {
+		return (width, height);
+	};
+	let size = monitor.size();
+	let scale = monitor.scale_factor() as f64;
+	let (available_width, available_height) = (
+		(size.width as f64 / scale) * 0.9,
+		(size.height as f64 / scale) * 0.9,
+	);
+	if width as f64 <= available_width && height as f64 <= available_height {
+		return (width, height);
+	}
+	let shrink = (available_width / width as f64).min(available_height / height as f64);
+	(
+		(width as f64 * shrink).max(1.0) as u32,
+		(height as f64 * shrink).max(1.0) as u32,
+	)
 }
 
 impl<A: App> Host<A> {

@@ -9,8 +9,12 @@ pub const GAMEFRAMEMS: u32 = 30;
 /// Frames per second, `1000 / GAMEFRAMEMS`. Kept as the upstream computes it.
 pub const GAMEFPS: f32 = 1000.0 / GAMEFRAMEMS as f32;
 
-pub const DEFAULT_SCREEN_WIDTH: i32 = 640;
-pub const DEFAULT_SCREEN_HEIGHT: i32 = 480;
+// The resolution used when neither the configuration nor its ini says one. Upstream's
+// smallest mode, 640x480, is what the game was written for and what it falls back to here
+// was, and on a modern display that is a postage stamp. The largest of upstream's own four
+// modes is used instead, and the host fits it to the display when that is smaller.
+pub const DEFAULT_SCREEN_WIDTH: i32 = 1280;
+pub const DEFAULT_SCREEN_HEIGHT: i32 = 960;
 
 /// Directory the ADDON mission list is read from.
 pub const ADDONDIR: &[u8] = b"addon";

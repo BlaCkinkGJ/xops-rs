@@ -4113,6 +4113,9 @@ mod tests {
 		let mut config = Config::new();
 		config.set_default_config();
 		config.set_default_ext_config();
+		// The layout is what is being tested, so the screen it is laid out on is stated
+		// rather than inherited from whatever the default happens to be today.
+		config.set_screen_size(640, 480);
 		config
 	}
 

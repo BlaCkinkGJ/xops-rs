@@ -488,15 +488,15 @@ impl Config {
 			\n\
 			[Graphics]\n\
 			;WindowSize\n\
-			;  0: 640x480  [4:3] (default)\n\
+			;  0: 640x480  [4:3]\n\
 			;  1: 800x600  [4:3]\n\
 			;  2:1024x768  [4:3]\n\
-			;  3:1280x960  [4:3]\n\
+			;  3:1280x960  [4:3] (default)\n\
 			;  4:1600x1200 [4:3]\n\
 			; 10:1280x720  [16:9]\n\
 			; 11:1600x900  [16:9]\n\
 			; 12:1920x1080 [16:9]\n\
-			WindowSize = 0\n\
+			WindowSize = 3\n\
 			\n\
 			\n\
 			[Input]\n\
@@ -535,7 +535,9 @@ impl Config {
 		let mode = ini.get_ini_file_int(b"Game", b"ShowArm", 0, None);
 		self.show_arm_flag = mode != 0;
 
-		let mode = ini.get_ini_file_int(b"Graphics", b"WindowSize", 0, None);
+		// The ini's own default, which is a mode number rather than a size. Three is
+	// 1280x960, the largest of the four the original offered.
+	let mode = ini.get_ini_file_int(b"Graphics", b"WindowSize", 3, None);
 		(self.screen_width, self.screen_height) = match mode {
 			0 => (640, 480),
 			1 => (800, 600),
@@ -583,6 +585,14 @@ impl Config {
 
 	pub fn get_show_arm_flag(&self) -> bool {
 		self.show_arm_flag
+	}
+
+	/// Sets the screen size, which the frame loop does when the window is resized: the
+	/// game's full-screen overlays are drawn in this size, so leaving it behind draws them
+	/// in the old one over part of the window.
+	pub fn set_screen_size(&mut self, width: i32, height: i32) {
+		self.screen_width = width;
+		self.screen_height = height;
 	}
 
 	pub fn get_screen_width(&self) -> i32 {
@@ -891,8 +901,8 @@ mod tests {
 		assert_eq!(loaded.load_ext_file(&path, &mut log), 0);
 		assert_eq!(loaded.get_language(), 0);
 		assert!(!loaded.get_show_arm_flag());
-		assert_eq!(loaded.get_screen_width(), 640);
-		assert_eq!(loaded.get_screen_height(), 480);
+		assert_eq!(loaded.get_screen_width(), DEFAULT_SCREEN_WIDTH);
+		assert_eq!(loaded.get_screen_height(), DEFAULT_SCREEN_HEIGHT);
 		assert!(loaded.get_mouse_limit_flag());
 		assert_eq!(loaded.get_volume(), 1.0);
 
@@ -917,8 +927,8 @@ mod tests {
 		let mut config = Config::new();
 		assert_eq!(config.load_ext_file(&path, &mut log), 0);
 		assert_eq!(config.get_language(), 0);
-		assert_eq!(config.get_screen_width(), 640);
-		assert_eq!(config.get_screen_height(), 480);
+		assert_eq!(config.get_screen_width(), DEFAULT_SCREEN_WIDTH);
+		assert_eq!(config.get_screen_height(), DEFAULT_SCREEN_HEIGHT);
 		assert!(config.get_mouse_limit_flag());
 		assert_eq!(config.get_volume(), 1.0);
 	}

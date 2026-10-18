@@ -123,9 +123,18 @@ fn write_cstr(dst: &mut [u8], src: &[u8]) {
 /// `strcpy(buf, dir); strcat(buf, name);`, the way every path in this file is built.
 fn joined(dir: &[u8], name: &[u8]) -> Vec<u8> {
 	let mut path = Vec::with_capacity(dir.len() + name.len());
-	path.extend_from_slice(dir);
-	path.extend_from_slice(name);
+	path.extend_from_slice(&dir[..c_str_len(dir)]);
+	path.extend_from_slice(&name[..c_str_len(name)]);
 	path
+}
+
+/// The length of a C string: everything up to the terminator, or the whole slice.
+///
+/// The demo path is a fixed `[u8; MAX_PATH]` buffer, which is mostly terminators, so
+/// appending the array whole puts one in the middle of the path. The file system then sees
+/// a directory where a file was meant, and the load fails naming the directory.
+fn c_str_len(bytes: &[u8]) -> usize {
+	bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())
 }
 
 /// The colour set all three menu scrollbars are given, which upstream repeats verbatim
@@ -2365,6 +2374,9 @@ mod tests {
 		let mut config = Config::new();
 		config.set_default_config();
 		config.set_default_ext_config();
+		// The layout is what is being tested, so the screen it is laid out on is stated
+		// rather than inherited from whatever the default happens to be today.
+		config.set_screen_size(640, 480);
 		config
 	}
 
@@ -3095,5 +3107,27 @@ mod tests {
 		opening.process(&mut state, &mut log, &mut d3dg, &config, &mut sound);
 		assert_eq!(state.get_state(), State::STATE_NOW_OPENING);
 		assert_eq!(opening.base.scene.framecnt, 529);
+	}
+
+	/// A path built out of a fixed buffer keeps its file name.
+	///
+	/// The demo path lives in a `[u8; MAX_PATH]`, so appending the array whole put a
+	/// terminator straight after the directory and the game tried to open `data\map5\`
+	/// as a file. That failed with the directory's name in the message and the menu behind
+	/// it, which is what a report of "block data open failed" turned out to be.
+	#[test]
+	fn a_path_built_from_a_fixed_buffer_keeps_its_file_name() {
+		let mut buffer = [0u8; MAX_PATH];
+		write_cstr(&mut buffer, b"data\\map5\\");
+
+		assert_eq!(
+			joined(&buffer, b"temp.bd1"),
+			b"data\\map5\\temp.bd1".to_vec(),
+			"the file name survives the buffer's terminators"
+		);
+		assert_eq!(
+			joined(&buffer, b"demo.pd1"),
+			b"data\\map5\\demo.pd1".to_vec()
+		);
 	}
 }

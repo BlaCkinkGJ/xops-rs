@@ -135,6 +135,10 @@ impl InputControl {
 	/// frame's, which is the upstream's two `memcpy`s. That is also why the edge checks
 	/// below read a table rather than consuming an edge: a screen asks for the same key
 	/// more than once in a frame, and every ask has to see the same frame.
+	///
+	/// **Once per frame, and only once.** The copy moves this frame's keys onto the previous
+	/// frame's, so a second call in the same frame makes the two identical and every edge
+	/// check false from then on. The screens call it; the loop around them must not.
 	pub fn get_input_state(&mut self, input: &mut Input, mousemode: bool) {
 		self.keys_lt = self.keys;
 		for (code, key) in self.keys.iter_mut().enumerate() {

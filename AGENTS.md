@@ -66,9 +66,21 @@ the two disagree.
   world is 130 KB, and a debug build gives every moved temporary its own stack
   slot, so a dozen copies in one function's arms came to seven megabytes of
   frame. Box it. The release build hid this for a while.
+- **A path built from a fixed buffer needs its C string taken first.** The menu's
+  demo path is a `[u8; MAX_PATH]`, which is mostly terminators, and appending the
+  array whole puts one in the middle of the path, so the game opens the directory
+  and the load fails naming `data/map5/` rather than the file. Take each part up to
+  its terminator when joining, as `strcat` does.
 - **Upstream drops the depth test for the effect pass in the OpenGL backend and
   only drops the depth writes in the DirectX one.** The port keeps the test.
   Rendering the two the same way makes effects show through walls.
+- **`get_input_state` is called once per frame, by the screen.** It copies this
+  frame's keys over the previous frame's, so a second call in the same frame makes
+  the two identical and every `CheckKeyDown` false: menus then move on held keys
+  only, and one-shot keys like Esc and F1 and F11 do nothing at all. The loop used
+  to read it before handing the screen a state it had already advanced, which looks
+  correct at both ends and is not. Upstream's loop does not read it either, and the
+  briefings and the result screen reach it through the shared scene base.
 - **A screen that fails to load its data does not advance the state machine.** Its
   `create` returns early, before the click that would carry the state forward, so
   nothing is processed until something ends the run. What ends it is

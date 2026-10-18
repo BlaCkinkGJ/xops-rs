@@ -136,7 +136,10 @@ impl Game {
 			return false;
 		}
 
-		self.input_ctrl.get_input_state(input, false);
+		// The input state is read by the screen, once per frame, and reading it here as well
+		// would break it: a second read copies the state it just took over the previous
+		// frame's, so every key that went down since the last frame reads as held in both
+		// and the game's edge checks never fire. Upstream's loop does not read it either.
 		process_screen(
 			&mut self.stage,
 			&mut self.state,
@@ -270,6 +273,12 @@ impl App for Shell {
 			std::process::exit(1);
 		}
 
+		// The window may have been fitted to the display, and the game draws its overlays in
+		// its own screen size, so the configuration takes the size the window actually got.
+		let size = window.inner_size();
+		self.config
+			.set_screen_size(size.width.max(1) as i32, size.height.max(1) as i32);
+
 		let config = std::mem::replace(&mut self.config, Config::new());
 		let log = std::mem::replace(&mut self.log, DebugLog::new());
 		let sound_ctrl = std::mem::replace(&mut self.sound_ctrl, SoundControl::new());
@@ -290,6 +299,28 @@ impl App for Shell {
 		}
 	}
 
+	/// The size the window is created at, taken from the configuration.
+	///
+	/// Read here rather than kept from `prepare`, because the window exists before `init`
+	/// runs and the game draws its overlays in its own screen size: a window of one size and
+	/// a screen size of another draws them over part of it.
+	fn window_size(&self) -> (u32, u32) {
+		// The constructor is upstream's, which leaves every value at zero and expects the
+		// defaults to be filled in. The window size is one of the extended settings, so it
+		// comes from the ini, and without either the size would be zero and the window 1x1.
+		let mut config = Config::new();
+		config.set_default_ext_config();
+		if let Ok(bytes) = xops_platform::fs::read_file(CONFIG_FILE) {
+			config.load_from_bytes(&bytes);
+		}
+		let mut log = DebugLog::new();
+		config.load_ext_file(EXT_CONFIG_FILE, &mut log);
+		(
+			config.get_screen_width().max(1) as u32,
+			config.get_screen_height().max(1) as u32,
+		)
+	}
+
 	fn frame(&mut self, input: &mut Input) -> bool {
 		let Some(game) = self.game.as_mut() else {
 			return false;
@@ -301,6 +332,7 @@ impl App for Shell {
 	fn resized(&mut self, width: u32, height: u32) {
 		if let Some(game) = &mut self.game {
 			game.d3dg.set_size(width as i32, height as i32);
+			game.config.set_screen_size(width as i32, height as i32);
 		}
 	}
 
