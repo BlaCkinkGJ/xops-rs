@@ -6,40 +6,73 @@
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use xops_platform::frame;
+use xops_game::d3dgraphics::D3DGraphics;
 use xops_platform::gfx::Gfx;
 use xops_platform::input::Input;
 use xops_platform::window::{self, App};
 use xops_platform::winit::event::WindowEvent;
 use xops_platform::winit::window::Window;
 
-/// The game's own frame, which the upstream `GameMain` will drive once it is ported.
+/// The game's own frame. The upstream `GameMain` drives this once it is ported; for now
+/// the renderer class starts and ends a frame and the camera points down the level.
 struct Shell {
+	graphics: Option<D3DGraphics>,
 	frames: u64,
 }
 
 impl Shell {
 	fn new() -> Shell {
-		Shell { frames: 0 }
+		Shell {
+			graphics: None,
+			frames: 0,
+		}
+	}
+
+	fn graphics(&mut self) -> &mut D3DGraphics {
+		self.graphics
+			.as_mut()
+			.expect("the host calls init before it calls frame")
+	}
+
+	/// One frame of the renderer, which is what the game's own loop will do around it.
+	fn draw(&mut self) {
+		let graphics = self.graphics();
+		graphics.start_render();
+		// The default field of view the game uses, in radians, and a camera at head
+		// height looking down the level. Replaced by the mission's spawn point.
+		graphics.set_camera(
+			0.0,
+			10.0,
+			0.0,
+			0.0,
+			0.0,
+			xops_game::core::degree_to_radian(70.0),
+		);
+		graphics.end_render();
+		self.frames += 1;
 	}
 }
 
 impl App for Shell {
-	fn init(&mut self, window: &std::sync::Arc<Window>, gfx: &mut Gfx, _input: &mut Input) {
+	fn init(&mut self, window: &Arc<Window>, gfx: Gfx) {
 		let _ = window.set_title("xops");
 		let (width, height) = gfx.size();
 		eprintln!("xops: {width}x{height}");
+		self.graphics = Some(D3DGraphics::new(gfx, false, 0));
 	}
 
-	fn frame(&mut self, gfx: &mut Gfx, _input: &mut Input) -> bool {
-		gfx.begin_frame();
-		gfx.clear(xops_platform::gl::GL_COLOR_BUFFER_BIT | xops_platform::gl::GL_DEPTH_BUFFER_BIT);
-		self.frames += 1;
+	fn frame(&mut self, _input: &mut Input) -> bool {
+		self.draw();
 		true
 	}
 
-	fn resized(&mut self, _gfx: &mut Gfx, _width: u32, _height: u32) {}
+	fn resized(&mut self, width: u32, height: u32) {
+		if let Some(graphics) = &mut self.graphics {
+			graphics.set_size(width as i32, height as i32);
+		}
+	}
 
 	fn event(&mut self, _event: &WindowEvent) -> bool {
 		true
@@ -157,24 +190,29 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 		backends: wgpu::Backends::all(),
 		..Default::default()
 	});
-	let mut gfx = Gfx::new(&instance, None, options.width, options.height, None)?;
-	let mut app = Shell::new();
-	let mut input = Input::default();
+	let gfx = Gfx::new(&instance, None, options.width, options.height, None)?;
+	let mut shell = Shell {
+		graphics: Some(D3DGraphics::new(gfx, false, 0)),
+		frames: 0,
+	};
 
 	let mut rendered = Vec::with_capacity(frames as usize);
 	for _ in 0..frames {
-		if !app.frame(&mut gfx, &mut input) {
-			break;
-		}
-		input.end_frame();
-		gfx.end_frame()?;
-		let (width, height, pixels) = gfx.read_frame()?;
+		shell.draw();
+		let (width, height, pixels) = shell
+			.graphics()
+			.gfx_ref()
+			.read_frame()?;
 		rendered.push((width, height, pixels));
 	}
 
-	let (width, height) = gfx.size();
+	let (width, height) = shell.graphics().gfx_ref().size();
 	let pixels: Vec<Vec<u8>> = rendered.into_iter().map(|(_, _, p)| p).collect();
-	frame::write_frame_sequence(out, "frame", width, height, &pixels)?;
-	println!("wrote {} frames of {width}x{height} to {}", pixels.len(), out.display());
+	xops_platform::frame::write_frame_sequence(out, "frame", width, height, &pixels)?;
+	println!(
+		"wrote {} frames of {width}x{height} to {}",
+		pixels.len(),
+		out.display()
+	);
 	Ok(())
 }

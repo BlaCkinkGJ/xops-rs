@@ -6,5 +6,6 @@ rust-version.workspace = true
 description = "OpenXOPS as a standalone cross-platform game."
 
 [dependencies]
+xops-game.workspace = true
 xops-platform.workspace = true
 wgpu.workspace = true

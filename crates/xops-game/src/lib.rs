@@ -11,5 +11,6 @@ pub mod d3dgraphics;
 pub mod debug;
 pub mod model;
 pub mod parameter;
+pub mod twod;
 
 pub use core::*;

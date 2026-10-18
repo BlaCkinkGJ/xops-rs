@@ -24,15 +24,19 @@ pub fn frame_step() -> Duration {
 }
 
 /// What the host calls back into.
+///
+/// The app takes ownership of the renderer at `init`, because the game's own graphics
+/// class owns it upstream and the frame is presented by the game's own end-of-frame call
+/// rather than by the host.
 pub trait App {
-	/// Called once the window and renderer exist.
-	fn init(&mut self, window: &Arc<Window>, gfx: &mut Gfx, input: &mut Input);
+	/// Called once the window exists. The app takes the renderer from here.
+	fn init(&mut self, window: &Arc<Window>, gfx: Gfx);
 
 	/// One simulated frame. Return `false` to quit.
-	fn frame(&mut self, gfx: &mut Gfx, input: &mut Input) -> bool;
+	fn frame(&mut self, input: &mut Input) -> bool;
 
-	/// The window changed size. The renderer has already been resized.
-	fn resized(&mut self, gfx: &mut Gfx, width: u32, height: u32);
+	/// The window changed size. The app has to resize its renderer.
+	fn resized(&mut self, width: u32, height: u32);
 
 	/// A raw window event, before it reaches the frame loop. Return `false` to quit.
 	fn event(&mut self, event: &WindowEvent) -> bool {
@@ -44,7 +48,6 @@ pub trait App {
 struct Host<A: App> {
 	app: A,
 	window: Option<Arc<Window>>,
-	gfx: Option<Gfx>,
 	input: Input,
 	next_frame: Instant,
 	frames: u64,
@@ -89,13 +92,9 @@ impl<A: App> ApplicationHandler for Host<A> {
 		};
 
 		window.request_redraw();
-		self.window = Some(window);
-		self.gfx = Some(gfx);
+		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
-
-		let window = self.window.as_ref().expect("just stored").clone();
-		let gfx = self.gfx.as_mut().expect("just stored");
-		self.app.init(&window, gfx, &mut self.input);
+		self.app.init(&window, gfx);
 	}
 
 	fn window_event(
@@ -114,36 +113,29 @@ impl<A: App> ApplicationHandler for Host<A> {
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
 			WindowEvent::Resized(size) => {
-				if let Some(gfx) = &mut self.gfx {
-					gfx.resize(size.width.max(1), size.height.max(1));
-					self.app.resized(gfx, size.width.max(1), size.height.max(1));
-				}
+				self.app
+					.resized(size.width.max(1), size.height.max(1));
 			}
 			_ => {}
 		}
 	}
 
 	fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-		let Some(gfx) = &mut self.gfx else {
+		if self.window.is_none() {
 			event_loop.exit();
 			return;
-		};
+		}
 
 		// Run every frame that is due. A hitch longer than a step catches up rather than
 		// skipping, but only up to a bound: a long stall (a debugger, a breakpoint) must
 		// not queue hundreds of frames.
 		let mut due = 0;
 		while Instant::now() >= self.next_frame && due < 4 {
-			if !self.app.frame(gfx, &mut self.input) {
+			if !self.app.frame(&mut self.input) {
 				event_loop.exit();
 				return;
 			}
 			self.input.end_frame();
-			if let Err(error) = gfx.end_frame() {
-				eprintln!("frame: {error}");
-				event_loop.exit();
-				return;
-			}
 			self.next_frame += frame_step();
 			self.frames += 1;
 			due += 1;
@@ -165,7 +157,6 @@ impl<A: App> Host<A> {
 		Host {
 			app,
 			window: None,
-			gfx: None,
 			input: Input::default(),
 			next_frame: Instant::now(),
 			frames: 0,

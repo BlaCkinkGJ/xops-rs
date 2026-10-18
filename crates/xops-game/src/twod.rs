@@ -1051,6 +1051,28 @@ mod tests {
 	}
 
 	#[test]
+	fn an_untextured_box_ignores_the_texture_left_bound_before_it() {
+		let mut graphics = D3DGraphics::new(headless(8, 8), false, 0);
+		// A green texture stays bound. Upstream's glDisable(GL_TEXTURE_2D) would make the
+		// box use its vertex colour alone, which the sentinel binding reproduces.
+		let id = graphics.gfx().gen_texture();
+		graphics.gfx().upload_texture(id, 1, 1, &[0, 255, 0, 255]);
+		graphics.gfx().bind_texture(id);
+
+		let pixels = render(&mut graphics, |graphics| {
+			graphics.draw_2d_box(
+				0,
+				0,
+				8,
+				8,
+				D3DGraphics::get_color_code(1.0, 0.0, 0.0, 1.0),
+			);
+		});
+
+		assert_eq!(pixel(&pixels, 8, 4, 4), [255, 0, 0, 255]);
+	}
+
+	#[test]
 	fn system_font_text_reaches_the_target_when_a_font_exists() {
 		// A 480 line screen makes the normal font 18px, the size the menus use.
 		let width = 320;

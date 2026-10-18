@@ -2501,6 +2501,7 @@ name = "xops"
 version = "0.1.0"
 dependencies = [
  "wgpu",
+ "xops-game",
  "xops-platform",
 ]
 
