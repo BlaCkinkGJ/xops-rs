@@ -4,13 +4,25 @@
 //! outside arrives through [`xops_platform`], which is what makes the game logic
 //! testable without a display and what keeps a graphics backend swappable.
 
+pub mod collision;
 pub mod config;
 pub mod core;
 pub mod datafile;
 pub mod d3dgraphics;
 pub mod debug;
+pub mod input;
+pub mod map;
 pub mod model;
+pub mod object;
+pub mod effects;
+pub mod weapon;
 pub mod parameter;
+pub mod statemachine;
 pub mod twod;
+pub mod window;
+
+pub mod resource;
+pub mod sound;
+pub mod soundmanager;
 
 pub use core::*;

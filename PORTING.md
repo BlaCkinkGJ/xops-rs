@@ -34,6 +34,15 @@ that forty translation units written in parallel come out as one program.
 and follow them line for line. Naming things differently is how a port stops being
 checkable.
 
+That rule is about identifiers whose name is their identity. Three places follow Rust's
+conventions instead, and each keeps the upstream name in a comment where it differs:
+
+- **Types, enums and their variants** are `CamelCase`, because a Rust enum variant in
+  SCREAMING_CASE is a compiler warning and thirty of them hide the one that matters.
+  The discriminants are what carry behaviour, so those stay exact.
+- **Enum variants that mirror a `#define`** carry the define's name in a doc comment.
+- **Module-scoped constants** stay SCREAMING_CASE, which is the same in both languages.
+
 **Out-parameters become returns.** Upstream is full of `void GetPosData(float*, float*,
 float*, float*)`. Rust returns a tuple:
 
@@ -45,6 +54,20 @@ pub fn pos_data(&self) -> (f32, f32, f32, f32, f32)
 A function that fills a caller-provided buffer keeps taking `&mut` of that buffer when the
 buffer is large or reused, because copying it out every frame is the kind of change that
 shows up as a frame-rate regression.
+
+**Paths.** Two kinds, and which one a function takes follows where the value came from:
+
+- A name that comes out of the game's data (a texture name in the map data, a model name
+  in the parameter table) is `&[u8]` Shift-JIS bytes, the same as any other game string.
+  `D3DGraphics::load_texture` takes it that way, and so does anything else that also needs
+  the bytes, because the format check reads the extension and the file header as bytes.
+- A path the host produced (the config file, a screenshot destination, a command line
+  argument) is `&std::path::Path`.
+
+`crate::datafile::path_from_bytes` is the single conversion between them, and it is called
+once at the point that touches the filesystem. Two loaders currently take `&Path` and
+convert at their call sites (`load_model`, `load_sound`) while `load_texture` takes bytes,
+which is a wart rather than a rule: prefer bytes for game-data names in new code.
 
 **Strings are bytes, not `String`.** Upstream strings are Shift-JIS, and the texture font
 indexes glyphs by byte value, so the bytes are the data. Game strings are `Vec<u8>` or a

@@ -45,6 +45,9 @@ pub mod vk {
 	pub const F12: usize = 0x7B;
 	pub const NUMLOCK: usize = 0x90;
 	pub const SCROLL: usize = 0x91;
+	pub const OEM_COMMA: usize = 0xBC;
+	pub const OEM_MINUS: usize = 0xBD;
+	pub const OEM_PERIOD: usize = 0xBE;
 	pub const LSHIFT: usize = 0xA0;
 	pub const RSHIFT: usize = 0xA1;
 	pub const LCONTROL: usize = 0xA2;
@@ -237,6 +240,9 @@ fn keycode_to_vk(code: KeyCode) -> Option<usize> {
 		KeyCode::SuperRight => vk::RWIN,
 		KeyCode::NumLock => vk::NUMLOCK,
 		KeyCode::ScrollLock => vk::SCROLL,
+		KeyCode::Comma => vk::OEM_COMMA,
+		KeyCode::Minus => vk::OEM_MINUS,
+		KeyCode::Period => vk::OEM_PERIOD,
 		KeyCode::Numpad0 => vk::NUMPAD0,
 		KeyCode::Numpad1 => vk::NUMPAD0 + 1,
 		KeyCode::Numpad2 => vk::NUMPAD0 + 2,

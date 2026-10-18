@@ -14,3 +14,4 @@ png = "0.17"
 jpeg-decoder = { version = "0.3", default-features = false }
 fontdue = "0.9.4"
 encoding_rs = "0.8.35"
+cpal = { version = "0.17.3", default-features = false }
