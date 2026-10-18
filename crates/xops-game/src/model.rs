@@ -21,10 +21,16 @@ struct XVertex {
 /// A loaded model, in the shape the client-array draw path wants.
 ///
 /// Every polygon contributes exactly six vertices, arranged so the whole thing draws as
-/// one triangle strip. A triangle becomes `a a b c c b` and a quad becomes `a a d b c c`,
-/// which is the upstream expansion: the duplicated vertices produce degenerate triangles
-/// that the strip skips over, so one `glDrawArrays(GL_TRIANGLE_STRIP, 0, polygons * 6)`
-/// covers the whole model.
+/// one triangle strip. A triangle becomes `a a c b b b` and a quad becomes `a a d b c c`,
+/// which is the upstream expansion, and one `glDrawArrays(GL_TRIANGLE_STRIP, 1, ...)` or
+/// its equivalent covers the whole model.
+///
+/// The last two vertices of each polygon must be the same one. A strip joins one polygon to
+/// the next with the triangle `(4, 5, 6)`, taking the fifth and sixth vertices of this
+/// polygon and the first of the following one, and that join is degenerate exactly when the
+/// fifth and sixth are equal. End them differently and every polygon boundary across the
+/// whole model grows a long thin triangle instead: on a soldier's face it is a dark streak
+/// from the nose to the chest, and on a gun it is a piece sticking out of the side.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModelData {
 	pub useflag: bool,
@@ -268,11 +274,12 @@ fn expand_model(vertices: &[XVertex], indices: &[[i32; 5]]) -> ModelData {
 	let mut cursor = 0usize;
 	for entry in indices {
 		// Six vertices per polygon, in the order the upstream writes them. A triangle is
-		// a a c b b c and anything else is a a d b c c, using the face's slots 1, 2, 3
-		// and 4. `slot` reads a face vertex, treating an out of range index as the
-		// origin rather than panicking the way a raw pointer would.
+		// a a c b b b -- the fifth and sixth are the same vertex, which is what keeps the
+		// join to the next polygon degenerate -- and anything else is a a d b c c, using
+		// the face's slots 1, 2, 3 and 4. `slot` reads a face vertex, treating an out of
+		// range index as the origin rather than panicking the way a raw pointer would.
 		let order: [usize; 6] = if entry[0] == 3 {
-			[1, 1, 3, 2, 2, 3]
+			[1, 1, 3, 2, 2, 2]
 		} else {
 			[1, 1, 4, 2, 3, 3]
 		};
@@ -451,7 +458,9 @@ Mesh {
 		assert_eq!(model.vertex_ary.len(), 18);
 		assert_eq!(model.tex_coord_ary.len(), 12);
 
-		// The face names vertices 0, 1, 2 and the upstream order is a a c b b c.
+		// The face names vertices 0, 1, 2 and the upstream order is a a c b b b: the last
+		// two are the same vertex, which is what makes the join to the next polygon
+		// degenerate rather than a triangle across the model.
 		let a = (0.0, 0.0, 0.0);
 		let b = (-1.0, 0.0, 0.0);
 		let c = (0.0, 1.0, 0.0);
@@ -460,7 +469,7 @@ Mesh {
 		assert_eq!(position(&model, 2), c);
 		assert_eq!(position(&model, 3), b);
 		assert_eq!(position(&model, 4), b);
-		assert_eq!(position(&model, 5), c);
+		assert_eq!(position(&model, 5), b);
 
 		// X is negated on the way in, because the model data is left handed.
 		assert_eq!(position(&model, 3).0, -1.0);
@@ -474,7 +483,7 @@ Mesh {
 		assert_eq!(texcoord(&model, 2), (0.0, 1.0));
 		assert_eq!(texcoord(&model, 3), (1.0, 0.0));
 		assert_eq!(texcoord(&model, 4), (1.0, 0.0));
-		assert_eq!(texcoord(&model, 5), (0.0, 1.0));
+		assert_eq!(texcoord(&model, 5), (1.0, 0.0));
 	}
 
 	#[test]

@@ -195,3 +195,15 @@ the two disagree.
 - **`XOPS_INTERPOLATE=0` still has to show the game's frames**, and only on the wakes that
   ran a step: the loop is woken by mouse motion and by the system as well, and presenting on
   each of those wakes is several identical frames a second the display never needs.
+- **A model polygon's last two strip vertices must be the same vertex, and the failure is
+  almost invisible in the code.** A triangle strip joins polygon N to polygon N+1 with the
+  triangle `(4, 5, 6)`: the fifth and sixth vertices of N and the first of N+1. That join is
+  degenerate only when N's fifth and sixth are equal, so upstream's expansion ends a triangle
+  `a a c b b b` -- it simply does not advance `vid` again -- and the port had written
+  `a a c b b c`, advancing it to `c`. The visible result was one long thin triangle at *every*
+  polygon boundary in *every* model: a dark streak down a soldier's face, slivers on guns, and
+  hairline spikes on map blocks and furniture. Checking triangles (2,3,4) and (3,4,5) says
+  "degenerate, harmless" and is wrong; the seam is (4,5,6).
+- **When the port and upstream differ, port upstream's *code*, not the *comment* about it.**
+  The port's comment said the expansion was reproduced "exactly". It was not, and a comment
+  claiming fidelity is not evidence of it.
