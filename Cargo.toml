@@ -17,6 +17,8 @@ xops-game = { path = "crates/xops-game" }
 
 bytemuck = { version = "1", features = ["derive"] }
 pollster = "0.4"
+# The defaults, which are the native APIs: Vulkan and DX12 and Metal. Nothing here is
+# a web backend, and the browser renderer this project once had is gone.
 wgpu = "24"
 winit = "0.30"
 

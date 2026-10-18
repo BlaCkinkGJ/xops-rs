@@ -47,6 +47,11 @@ the two disagree.
 
 - `cargo test --workspace` is the suite, and it is fast. `cargo check --workspace
   --all-targets` must stay warning-free, on every target.
+- **Most of the suite needs a GPU adapter**, because the renderer is what it is
+  testing. A bare container has none, and there it looks like fifty-three
+  failures rather than one cause: `Gfx::new` returns an error and every test that
+  built a renderer panics at its `headless()` helper. Install a software driver
+  (`mesa-vulkan-drivers` on Debian) and they run.
 - **Verify by running it, not by reading the diff.** A change to rendering or the
   frame loop means launching the game; a change to a loader means loading a
   mission. `--frames N --out DIR` renders offscreen, which is how a difference

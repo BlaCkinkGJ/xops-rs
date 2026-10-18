@@ -165,11 +165,15 @@ Run, not read:
   rotation matches to three thousandths, and the map batches and their winding
   are identical.
 
-And built, rather than run, for the other two platforms: the whole workspace
-type-checks for `x86_64-pc-windows-msvc`, and it compiles clean inside a Linux
-container with `libasound2-dev` installed. Neither has been played on, because
-there is no Windows or Linux machine here: what is confirmed is that nothing in
-the Rust is platform specific beyond the font paths, which all three have.
+And on Linux, in a container: the whole workspace compiles, and the suite runs
+under a software Vulkan driver with the renderer tests included. A container with
+no driver fails those instead, which is fifty-three red lines with one cause
+behind them.
+
+Windows is checked rather than run: the whole workspace type-checks for
+`x86_64-pc-windows-msvc`. There is no Windows machine here to play it on, so what
+is confirmed is that nothing in the Rust is platform specific beyond the font
+paths, which all three platforms have.
 
 ## Known limitations
 
