@@ -2,8 +2,14 @@ name: CI
 
 # What this checks, and why each part is here:
 #
+# - format: `rustfmt.toml` is the style, tabs and all, and this is what keeps the
+#   tree in it. It is a separate step from lint because it fails differently: a
+#   formatter tells you to run a command, a lint tells you what is wrong.
 # - lint: the workspace stays warning-free. `AGENTS.md` calls that a rule, and clippy
 #   is the version of it that has opinions, so this is the gate that keeps it true.
+# - check: every target of every crate type-checks, tests and benches included. Clippy
+#   already does this to lint, so on Linux this step is the cache answering; on the
+#   other two platforms it is the only one of these four that runs at all.
 # - test: the suite. It is fast -- a couple of seconds -- and most of it builds a
 #   renderer, which is the point: a change to drawing is verified by running it.
 # - coverage: the same tests under instrumentation, with the report kept as an
@@ -41,7 +47,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, llvm-tools-preview
+          components: rustfmt, clippy, llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
 
@@ -59,8 +65,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libasound2-dev mesa-vulkan-drivers
 
+      - name: format
+        run: cargo fmt --all --check
+
       - name: lint
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: check
+        run: cargo check --workspace --all-targets
 
       - name: test
         run: cargo test --workspace
@@ -91,8 +103,13 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: check every target
+      - name: format
+        run: cargo fmt --all --check
+
+      - name: check
         run: cargo check --workspace --all-targets
