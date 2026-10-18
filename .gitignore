@@ -5,6 +5,10 @@
 /config-openxops.ini
 
 /target/
+
+# Frames written by `--frames`, which are of the original game's graphics and must
+# not be committed. See the rule in AGENTS.md.
+/frames/
 # macOS writes these wherever a directory is opened in Finder.
 .DS_Store
 __pycache__/

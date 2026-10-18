@@ -34,14 +34,51 @@ on a laptop.
 
 ## Run
 
-The game's own paths are relative to the directory it runs in, so the data goes
-in a `data` folder beside it, as it does for the original.
+### From nothing
+
+The port is the program; the *data* is the original game's, and it is not in this
+repository. Four steps, and the first one is the only one that needs anything from
+outside:
+
+1. **Get *X operations* 0.96.** It is freeware, by nine-two, and
+   [LICENSE.md](LICENSE.md) has the link and the terms. Do not redistribute it.
+2. **Put its `data` folder beside the binary.** The game's own paths are relative
+   to the directory it runs in, so the layout is `data/` next to `xops`, as it is
+   for the original. `--dir PATH` says so explicitly if you would rather run it
+   from somewhere else, which is what a desktop shortcut needs.
+3. **Run it.**
+
+   ```sh
+   ./target/release/xops
+   ```
+
+   The opening sequence plays, then the menu. The first run writes `config.dat`
+   beside the binary: the key bindings, the window size and the sound volume all
+   live there, and the game keeps them up to date as you change them in the menus.
+
+4. **Play a mission.** The menu reaches them, and so does the command line:
+
+   ```sh
+   ./target/release/xops --mission missions/training.mif
+   ```
+
+If it starts and cannot find the data, it says which directory it looked in before
+it gives up; that line is the answer to almost every "it will not start".
+
+### The other ways to run it
 
 ```sh
 ./target/release/xops                              # opening, then the menu
 ./target/release/xops --mission missions/training.mif   # straight into a mission
 ./target/release/xops --frames 60 --out frames     # offscreen, no window
+./target/release/xops --help                       # the options, briefly
 ```
+
+`--frames` renders without opening a window, which is how the frames in a
+comparison are produced and the only mode that works over SSH. Its frames are of
+the original game's graphics: they are not to be committed or redistributed
+either, and `frames/` is in `.gitignore` so that the example above cannot land
+them in the repository by accident.
 
 | Option | What it does |
 | --- | --- |
