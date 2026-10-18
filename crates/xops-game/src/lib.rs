@@ -15,6 +15,7 @@ pub mod gui_object;
 pub mod human;
 pub mod motion;
 pub mod input;
+pub mod maingame;
 pub mod map;
 pub mod model;
 pub mod object;
@@ -34,4 +35,5 @@ pub mod soundmanager;
 
 pub use core::*;
 
+pub mod ai;
 pub mod briefing;
