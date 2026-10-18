@@ -11,7 +11,10 @@ that forty translation units written in parallel come out as one program.
 | `crates/xops-game/` | The game: data files, collision, AI, objects, missions, menus. No GPU or window types. | `datafile.cpp`, `collision.cpp`, `ai.cpp`, `object.cpp`, `objectmanager.cpp`, `parameter.cpp`, `gamemain.cpp`, `scene.cpp`, `statemachine.cpp`, `event.cpp`, `resource.cpp`, `gui-object.cpp`, `debug.cpp`, `config.cpp`, `main.cpp` |
 | `crates/xops/` | The binary: argument handling, the frame loop host. | `WinMain` in `main.cpp` |
 
-`vendor/openxops/` stays as the reference. It is not edited further.
+The upstream C++ is the reference for everything below, and it is not part of this
+repository: take it from the OpenXOPS Project at <https://openxops.net/> and read it
+beside this file. Where the code here names an upstream file and line, that is the
+place it was translated from.
 
 ## What is fixed and must not drift
 

@@ -20,7 +20,7 @@ the two disagree.
 | `crates/xops-platform/` | Everything that touches the OS: window, input, audio, files, fonts, the renderer |
 | `data/` | The game's data. Not in git, must not be redistributed |
 | `missions/` | Two example missions, our own |
-| `vendor/openxops/` | The upstream sources, kept as the reference for behaviour |
+| upstream C++ | The OpenXOPS 1.080 sources, the reference for behaviour. **Not in this repository**: get them from <https://openxops.net/> |
 
 ## Rules
 
@@ -232,7 +232,12 @@ the two disagree.
 - **No third-party binary without its notice.** The libjpeg, libpng and zlib copies
   the upstream archive bundles were removed for this reason: the port does not link
   them, so carrying them meant carrying their notices or not being entitled to carry
-  the files. `vendor/openxops/` is upstream's *source* under 3-clause BSD, and its
-  own `LICENSE` says what is and is not included.
+  the files. The upstream C++ sources went the same way -- they are a reference, not
+  a dependency, and nothing here builds against them -- and `LICENSE.md` says what is
+  in the repository and what is not.
+- **This port is a derivative work of OpenXOPS, and its licence says so.** The
+  upstream notice stays in `LICENSE` beside this port's own, however it looks: the
+  port was written *from* those sources, which is what 3-clause BSD asks to be
+  acknowledged.
 - What is in the repository, what is not, and why is described in `README.md` and
   `LICENSE.md`. If a change makes either of those untrue, the change is wrong.

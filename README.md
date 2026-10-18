@@ -247,15 +247,20 @@ paths, which all three platforms have.
 
 ## License
 
-3-clause BSD, from the OpenXOPS Project. See [LICENSE.md](LICENSE.md): the full
-text, the third-party parts that belong to nine-two and TENKUU, and the rule that
-the original game's graphics data must not be redistributed.
+3-clause BSD, from the OpenXOPS Project, whose notice sits in [LICENSE](LICENSE)
+beside this port's own because this is a port of their work.
+[LICENSE.md](LICENSE.md) has the longer notice: the third-party parts that belong
+to nine-two and TENKUU, and the rule that the original game's graphics data must
+not be redistributed.
 
 **No game data is in this repository, and none has ever been committed.** The tree
-holds source, the two example missions and two generated test fixtures; every other
-file is text. `data/` is kept out by `.gitignore`, and no graphic, sound or mission
-file of the original is in the repository or anywhere in its history -- checked by
-scanning every object it has ever held, by name, by extension and by file signature,
-rather than assumed. `vendor/openxops/` is upstream's source, which is BSD licensed;
-the libjpeg, libpng and zlib copies its archive bundles, and its icon, are not here,
-because nothing in this port uses them.
+holds source, the two example missions and two generated test fixtures; nothing else
+in it is binary. `data/` is kept out by `.gitignore`, and no graphic, sound or
+mission file of the original is in the repository or anywhere in its history --
+checked by scanning every object it has ever held, by name, by extension and by file
+signature, rather than assumed.
+
+Nor is anybody else's source. The OpenXOPS 1.080 C++ is what this port was written
+from and the reference for how it behaves, and a reference is not a dependency:
+get it from the OpenXOPS Project at <https://openxops.net/>. What is here is this
+port's own code, the two test fixtures it generated, and nothing else.

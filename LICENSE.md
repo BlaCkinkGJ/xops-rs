@@ -7,11 +7,15 @@ open-source remake of *X operations*. It is not the official OpenXOPS, it is not
 affiliated with the OpenXOPS Project, and it is not distributed under the
 OpenXOPS name.
 
-* `vendor/openxops/` is the OpenXOPS 1.080 source code, with the patches listed in
-  `README.md` applied and the Japanese comments translated to English (comments
-  only, no code or string literals were touched).
-* `crates/` and `missions/` are this port's own code, and none of it comes from the
-original.
+* It is written **from the OpenXOPS 1.080 C++ sources**, which are the reference
+  for every question about how the game behaves: the game above the platform layer
+  is a translation of them, file for file and function for function, and the
+  comments in the code name the upstream file and line each piece came from.
+* **Those sources are not redistributed here, and neither is any other part of
+  OpenXOPS.** Get them from the OpenXOPS Project at <https://openxops.net/>.
+* `crates/` and `missions/` are this port's own code. The platform layer -- the
+  window, the input, the audio, the renderer -- is new, because the APIs the
+  original used no longer exist.
 
 ## OpenXOPS: 3-clause BSD
 
@@ -46,25 +50,18 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-That copyright notice, those conditions and that disclaimer apply to every file
-in `vendor/openxops/` and to the compiled result of this port. A copy also sits
-at `vendor/openxops/LICENSE`, so the source tree carries the notice itself. The
-per-file banner the upstream sources already carry
-
-```
-Copyright (c) 2014-2023, OpenXOPS Project / [-_-;](mikan) All rights reserved.
-```
-
-is retained in every file. The port's own edits to those files are marked in the
-code with `#ifdef __EMSCRIPTEN__`, left over from a browser build this port no
-longer has; a compiler that does not define `__EMSCRIPTEN__`, which is all of
-them here, sees the upstream code.
+That copyright notice, those conditions and that disclaimer apply to this port,
+because this port is a translation of the work they cover: it is a derivative work
+of OpenXOPS 1.080, and the notice is retained for exactly that reason. It appears
+in `LICENSE`, which is the licence this repository is under, with this port's own
+copyright line beside it.
 
 ## This port
 
-`crates/`, `missions/` and this file are released
-under the same 3-clause BSD terms, copyright (c) 2026 BlaCkinkGJ and contributors
-of this port.
+`crates/`, `missions/`, `LICENSE`, `LICENSE.md` and the rest of this repository are
+released under the same 3-clause BSD terms, copyright (c) 2026 BlaCkinkGJ and
+contributors of this port. The full text is in `LICENSE`; this file is the longer
+notice it points at.
 
 ## Game data is not included
 
@@ -97,8 +94,9 @@ Those files may only be used by OpenXOPS and its derived projects, and their
 copyright notice has to be shown in the documentation of any such project.
 
 The upstream 1.080 source archive additionally bundles libjpeg, libpng and zlib
-under their own licenses. Those copies are not part of this repository: nothing
-here links or reads them, so their notices do not have to be carried.
+under their own licenses. Those copies are not part of this repository either, and
+nothing here links or reads them: this port decodes JPEG and PNG in Rust, through
+the `jpeg-decoder` and `png` crates.
 
 ## Naming
 
