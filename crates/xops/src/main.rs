@@ -3,11 +3,21 @@
 //! Two ways to run it: a window, or a headless pass that renders frames to PNG. The
 //! second exists because the pixel comparison against the browser build needs frames as
 //! files, and because a render difference is easier to find when it is not moving.
+//!
+//! The game data is not redistributable and is not in this repository, so the mission is
+//! named on the command line. The paths inside a mission are relative to the game's own
+//! directory, which is why `--dir` exists: run against a data folder rather than the
+//! repository root.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use xops_game::core::degree_to_radian;
+use xops_game::datafile::{
+	get_file_directory, path_from_bytes, BlockDataInterface, MIFInterface, PointDataInterface,
+	POINT_P1TYPE_HUMAN,
+};
 use xops_game::d3dgraphics::D3DGraphics;
 use xops_platform::gfx::Gfx;
 use xops_platform::input::Input;
@@ -15,17 +25,38 @@ use xops_platform::window::{self, App};
 use xops_platform::winit::event::WindowEvent;
 use xops_platform::winit::window::Window;
 
-/// The game's own frame. The upstream `GameMain` drives this once it is ported; for now
-/// the renderer class starts and ends a frame and the camera points down the level.
+/// `VIEW_HEIGHT` from the upstream `gamemain.h`: the eye sits this far above the feet.
+/// It belongs in the game's main module once that lands.
+const VIEW_HEIGHT: f32 = 19.0;
+/// `VIEWANGLE_NORMAL` from the upstream `gamemain.h`, the standard field of view.
+const VIEWANGLE_NORMAL: f32 = 65.0;
+
+/// What the camera needs, read out of the mission when it loads.
+struct Level {
+	camera_x: f32,
+	camera_y: f32,
+	camera_z: f32,
+	camera_rx: f32,
+	sky: i32,
+	wireframe: bool,
+}
+
+/// The game's own frame. The upstream `GameMain` drives this once it is ported.
 struct Shell {
 	graphics: Option<D3DGraphics>,
+	level: Option<Level>,
+	mission: Option<PathBuf>,
+	wireframe: bool,
 	frames: u64,
 }
 
 impl Shell {
-	fn new() -> Shell {
+	fn new(mission: Option<PathBuf>, wireframe: bool) -> Shell {
 		Shell {
 			graphics: None,
+			level: None,
+			mission,
+			wireframe,
 			frames: 0,
 		}
 	}
@@ -36,21 +67,90 @@ impl Shell {
 			.expect("the host calls init before it calls frame")
 	}
 
+	/// Loads a mission and its map. Everything the block reader needs comes out of the
+	/// `.mif`, and the block textures are named relative to the map's own directory.
+	fn load_mission(&mut self, path: &Path) -> Result<(), String> {
+		let name = path.to_string_lossy().into_owned();
+
+		let mut mission = MIFInterface::new();
+		if mission.load_file_data(name.as_bytes(), false) != 0 {
+			return Err(format!("{name}: the mission did not load"));
+		}
+
+		let (blockfile, pointfile) = mission.get_datafile_path();
+		let mut blocks = BlockDataInterface::new();
+		if blocks.load_file_data(blockfile) != 0 {
+			return Err(format!(
+				"{}: the map did not load",
+				path_from_bytes(blockfile).display()
+			));
+		}
+		// The shading is baked into the block data and has to run before anything draws.
+		blocks.calculation_blockdata(false);
+
+		let mut directory = [0u8; 260];
+		get_file_directory(blockfile, &mut directory);
+
+		// The player's start: the first point that places a human.
+		let mut points = PointDataInterface::new();
+		let loaded_points = points.load_file_data(pointfile) == 0;
+		let spawn = if loaded_points {
+			points
+				.search_pointdata(0x01, POINT_P1TYPE_HUMAN, 0, 0, 0, 0)
+				.1
+		} else {
+			None
+		};
+
+		let (feet_x, feet_y, feet_z, rx) = match spawn {
+			Some(point) => (point.x, point.y, point.z, point.r),
+			// A map with no spawn point still renders, from the middle of it.
+			None => (0.0, 0.0, 0.0, 0.0),
+		};
+
+		let sky = mission.get_skynumber();
+		self.graphics().load_mapdata(blocks, &directory);
+		self.level = Some(Level {
+			camera_x: feet_x,
+			camera_y: feet_y + VIEW_HEIGHT,
+			camera_z: feet_z,
+			camera_rx: rx,
+			sky,
+			wireframe: self.wireframe,
+		});
+
+		let (width, height) = self.graphics().gfx_ref().size();
+		eprintln!(
+			"xops: {name}, map {} ({}x{}), sky {sky}, camera at ({feet_x:.1}, {:.1}, {feet_z:.1})",
+			path_from_bytes(blockfile).display(),
+			width,
+			height,
+			feet_y + VIEW_HEIGHT
+		);
+		Ok(())
+	}
+
 	/// One frame of the renderer, which is what the game's own loop will do around it.
 	fn draw(&mut self) {
+		let level = self.level.take();
 		let graphics = self.graphics();
+
 		graphics.start_render();
-		// The default field of view the game uses, in radians, and a camera at head
-		// height looking down the level. Replaced by the mission's spawn point.
-		graphics.set_camera(
-			0.0,
-			10.0,
-			0.0,
-			0.0,
-			0.0,
-			xops_game::core::degree_to_radian(70.0),
-		);
+		if let Some(level) = &level {
+			graphics.set_fog(true, level.sky);
+			graphics.set_camera(
+				level.camera_x,
+				level.camera_y,
+				level.camera_z,
+				level.camera_rx,
+				0.0,
+				degree_to_radian(VIEWANGLE_NORMAL),
+			);
+			graphics.render_mapdata(level.wireframe);
+			graphics.set_fog(false, 0);
+		}
 		graphics.end_render();
+		self.level = level;
 		self.frames += 1;
 	}
 }
@@ -61,6 +161,12 @@ impl App for Shell {
 		let (width, height) = gfx.size();
 		eprintln!("xops: {width}x{height}");
 		self.graphics = Some(D3DGraphics::new(gfx, false, 0));
+
+		if let Some(path) = self.mission.clone() {
+			if let Err(error) = self.load_mission(&path) {
+				eprintln!("xops: {error}");
+			}
+		}
 	}
 
 	fn frame(&mut self, _input: &mut Input) -> bool {
@@ -87,13 +193,18 @@ impl Drop for Shell {
 	}
 }
 
-#[derive(Debug)]
 struct Options {
 	/// Render this many frames headlessly and write them out, instead of opening a window.
 	frames: Option<u64>,
 	out: Option<PathBuf>,
 	width: u32,
 	height: u32,
+	/// A `.mif` to load. The paths inside it are relative to the game's own directory.
+	mission: Option<PathBuf>,
+	/// Where the game's data lives. The mission paths are relative to it, so this is the
+	/// directory the binary runs against.
+	dir: Option<PathBuf>,
+	wireframe: bool,
 	help: bool,
 }
 
@@ -104,6 +215,9 @@ impl Default for Options {
 			out: None,
 			width: 640,
 			height: 480,
+			mission: None,
+			dir: None,
+			wireframe: false,
 			help: false,
 		}
 	}
@@ -131,6 +245,17 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 				options.width = w.parse().map_err(|_| "--size width")?;
 				options.height = h.parse().map_err(|_| "--size height")?;
 			}
+			"--mission" => {
+				index += 1;
+				let value = args.get(index).ok_or("--mission needs a path")?;
+				options.mission = Some(PathBuf::from(value));
+			}
+			"--dir" => {
+				index += 1;
+				let value = args.get(index).ok_or("--dir needs a path")?;
+				options.dir = Some(PathBuf::from(value));
+			}
+			"--wireframe" => options.wireframe = true,
 			"--help" | "-h" => options.help = true,
 			other => return Err(format!("unknown argument: {other}")),
 		}
@@ -148,10 +273,13 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 fn usage() -> &'static str {
 	"xops [options]
 
-  --frames N     render N frames offscreen and write them to --out, then exit
-  --out DIR      where those frames go
-  --size WxH     frame size (default 640x480)
-  -h, --help     this text
+  --mission PATH  a .mif to load and render. Its paths are relative to --dir.
+  --dir PATH      the game's data directory, which the mission paths are relative to
+  --wireframe     draw the map as a wireframe
+  --frames N      render N frames offscreen and write them to --out, then exit
+  --out DIR       where those frames go
+  --size WxH      frame size (default 640x480)
+  -h, --help      this text
 
 With no --frames, opens a window and runs the frame loop."
 }
@@ -171,9 +299,19 @@ fn main() -> ExitCode {
 		return ExitCode::SUCCESS;
 	}
 
+	// The mission's own paths are relative to the game directory, so the game directory
+	// has to be the working directory before anything loads.
+	if let Some(dir) = &options.dir {
+		if let Err(error) = std::env::set_current_dir(dir) {
+			eprintln!("xops: {}: {error}", dir.display());
+			return ExitCode::FAILURE;
+		}
+	}
+
+	let mission = options.mission.clone();
 	let result = match options.frames {
 		Some(frames) => headless(&options, frames),
-		None => window::run(Shell::new()),
+		None => window::run(Shell::new(mission, options.wireframe)),
 	};
 	match result {
 		Ok(()) => ExitCode::SUCCESS,
@@ -191,19 +329,16 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 		..Default::default()
 	});
 	let gfx = Gfx::new(&instance, None, options.width, options.height, None)?;
-	let mut shell = Shell {
-		graphics: Some(D3DGraphics::new(gfx, false, 0)),
-		frames: 0,
-	};
+	let mut shell = Shell::new(options.mission.clone(), options.wireframe);
+	shell.graphics = Some(D3DGraphics::new(gfx, false, 0));
+	if let Some(path) = options.mission.clone() {
+		shell.load_mission(&path)?;
+	}
 
 	let mut rendered = Vec::with_capacity(frames as usize);
 	for _ in 0..frames {
 		shell.draw();
-		let (width, height, pixels) = shell
-			.graphics()
-			.gfx_ref()
-			.read_frame()?;
-		rendered.push((width, height, pixels));
+		rendered.push(shell.graphics().gfx_ref().read_frame()?);
 	}
 
 	let (width, height) = shell.graphics().gfx_ref().size();

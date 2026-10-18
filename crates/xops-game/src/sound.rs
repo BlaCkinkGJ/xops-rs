@@ -78,7 +78,7 @@ impl SoundControl {
 	///
 	/// Success: 0, failure: 1. A machine without an audio device still succeeds, exactly
 	/// as the upstream does when the DLL loads but its `DSinit` fails: it returns 0 there
-	/// too, with the `return 1` commented out (`sound-ezds.cpp:96`).
+	/// too, with the `return 1` commented out (`sound-ezds.cpp:112`).
 	pub fn init_sound(&mut self) -> i32 {
 		if self.sound.is_some() {
 			return 1;
@@ -129,11 +129,6 @@ impl SoundControl {
 		self.volume_max = 100 - (mastervolume.log10() * -0.2 * 200.0) as i32;
 	}
 
-	/// The master volume as it was last set.
-	pub fn get_volume(&self) -> f32 {
-		self.mastervolume
-	}
-
 	/// `SoundControl::SetCamera`: the position the distance is measured from. Every frame
 	/// it has to be set again, because the attenuation uses the latest one.
 	pub fn set_camera(&mut self, x: f32, y: f32, z: f32, rx: f32) {
@@ -162,7 +157,7 @@ impl SoundControl {
 		};
 
 		// Upstream plays the sound once at the lowest volume straight after loading, to
-		// prime the DLL's buffer (`sound-ezds.cpp:180`). It is kept: it spends the same
+		// prime the DLL's buffer (`sound-ezds.cpp:200`). It is kept: it spends the same
 		// one voice, and at -100 the gain is zero.
 		sound.play(id as i32, -100, 0);
 
@@ -270,7 +265,7 @@ impl SoundControl {
 	}
 
 	/// The master volume folded into the device's scale, the expression inlined in
-	/// `sound-ezds.cpp:235` and again in the browser port.
+	/// `sound-ezds.cpp:236` and again in the browser port (`port/sound-sdl2.cpp:279`).
 	///
 	/// `volume` is the caller's -100 to 100 and the result is what reaches the mixer. A
 	/// separate function only so that it can be checked without a device.

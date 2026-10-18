@@ -8,34 +8,34 @@
 //! * a screen is a struct with a field named `base` holding its base, so `opening` holds a
 //!   [`D3Dscene`] and `briefing` a [`D2Dscene`];
 //! * a phase the base does real work in is a method on the base struct and the screen calls
-//!   it, as in `self.base.scene.input(input, state, log)`. `D3Dscene::Process` and
-//!   `D3Dscene::Render3D` are empty upstream, which is why a 3D screen's own `process`
+//!   it, as in `self.base.scene.input(input_ctrl, input, state, log)`. `D3Dscene::Process`
+//!   and `D3Dscene::Render3D` are empty upstream, which is why a 3D screen's own `process`
 //!   advances `self.base.scene.framecnt` itself rather than calling the base;
 //! * the drawing hooks (`Render3D`, `Render2D`) are not on the base at all: every screen
-//!   upstream overrides them and none calls the base version, so a screen simply has its own
-//!   methods. `render_main` still needs them to run in the right order, so it is an
+//!   upstream overrides them and none calls the base version, so a screen simply has its
+//!   own methods. `render_main` still has to run them in the right order, so it is an
 //!   associated function taking the screen and its hooks. It cannot be a method on the base
 //!   because the screen that implements the hooks also contains the base, and one `&mut`
 //!   cannot reach both.
 //!
 //! The classes the base holds pointers to upstream (`GameState`, `WindowControl`,
-//! `D3DGraphics`, `InputControl`, `SoundManager`) are singletons there. This port stores
-//! none of them: every method that needs one takes it as an argument, which is the port's
-//! rule for globals and the only way to keep the borrows disjoint. `scene::SetClass` has
-//! nothing left to do as a result, and `scene::Create` takes the window that
-//! `InputControl::MoveMouseCenter` used to reach through its own handle.
+//! `D3DGraphics`, `InputControl`, `SoundManager`) are file scope singletons there. This port
+//! stores none of them: every method that needs one takes it as an argument, which is the
+//! port's rule for globals and the only way to keep the borrows disjoint. Upstream
+//! `scene::SetClass` existed to store those pointers, so it has nothing left to do.
 
-use xops_platform::host::HostWindow;
-use xops_platform::input::{vk, Input};
+use xops_platform::input::Input;
 
 use crate::config::Config;
-use crate::datafile::path_from_bytes;
 use crate::d3dgraphics::D3DGraphics;
 use crate::debug::DebugLog;
+use crate::input::{get_esc_keycode, InputControl};
 use crate::soundmanager::SoundManager;
 use crate::statemachine::StateMachine;
+use crate::window::WindowControl;
 
-/// The title image both 2D screens and the menu load, upstream a literal at each call site.
+/// The title image every 2D screen and the menu are drawn over, `data\title.dds`. Upstream
+/// this is a literal repeated at each call site.
 const TITLE_TEXTURE: &[u8] = b"data\\title.dds";
 
 /// The screen base, the upstream `scene`.
@@ -57,15 +57,14 @@ impl Scene {
 	pub fn create(
 		&mut self,
 		state: &mut StateMachine,
-		window: &HostWindow,
+		window: &WindowControl,
+		config: &Config,
+		input_ctrl: &InputControl,
 		log: &mut DebugLog,
 	) -> i32 {
-		// Upstream `InputControl::MoveMouseCenter` centres on `GameConfig.GetScreenWidth()
-		// / 2`, which is the client area the window was created at. The window is asked for
-		// it directly, which is the same number and stays right when the mode changes.
-		if let Some((width, height)) = window.client_size() {
-			window.set_cursor_position(width as f64 / 2.0, height as f64 / 2.0);
-		}
+		// Upstream this is `inputCtrl->MoveMouseCenter()`, which reaches through the window
+		// and the screen size the class stored.
+		input_ctrl.move_mouse_center(window, config);
 
 		self.framecnt = 0;
 
@@ -82,14 +81,21 @@ impl Scene {
 	/// The upstream `scene::Input`: Escape leaves the screen, releasing the left mouse
 	/// button picks.
 	///
-	/// Upstream this starts with `GetInputState(false)`, which samples the keyboard into a
-	/// table and keeps the previous frame's copy to compare against. The platform input
-	/// layer is fed by the event loop and counts those transitions as they arrive, so there
-	/// is nothing to sample here and the two checks below read the edges directly.
-	pub fn input(&mut self, input: &mut Input, state: &mut StateMachine, log: &mut DebugLog) {
-		if input.take_key_down(vk::ESCAPE) {
+	/// `get_input_state` is upstream's first line, and it is what makes the two checks below
+	/// edges: it copies the platform's key table into this frame's and keeps the previous
+	/// frame's, exactly as the upstream does.
+	pub fn input(
+		&mut self,
+		input_ctrl: &mut InputControl,
+		input: &mut Input,
+		state: &mut StateMachine,
+		log: &mut DebugLog,
+	) {
+		input_ctrl.get_input_state(input, false);
+
+		if input_ctrl.check_key_down(get_esc_keycode()) {
 			state.push_back_space_key(log);
-		} else if input.take_button_up(0) {
+		} else if input_ctrl.check_mouse_button_up_l() {
 			state.push_mouse_button(log);
 		}
 	}
@@ -143,8 +149,8 @@ impl Scene {
 	///
 	/// `tframecnt - frameoffset` is unsigned upstream, so counting from before the offset
 	/// wraps to a huge number rather than going negative, and the clamp turns that into a
-	/// fully faded in screen. No call site reaches that: every one of them has the frame
-	/// count past the offset by the time it asks.
+	/// fully faded in screen. No call site reaches that: each one has the frame count past
+	/// the offset by the time it asks.
 	pub fn get_effect_alpha(
 		&self,
 		tframecnt: u32,
@@ -320,8 +326,8 @@ pub struct D3Dscene {
 }
 
 impl D3Dscene {
-	/// The upstream constructor, which starts the camera at the origin looking down +Z.
-	/// A screen moves it in its own `create`, which is where the upstream does it too.
+	/// The upstream constructor, which starts the camera at the origin. A screen places it
+	/// in its own `create`, which is where the upstream does it too.
 	pub fn new() -> D3Dscene {
 		D3Dscene {
 			scene: Scene::new(),
@@ -334,8 +340,7 @@ impl D3Dscene {
 	}
 
 	/// The upstream `D3Dscene::Sound`, the sound the whole world makes, positioned at the
-	/// camera. Upstream this is the base's `Sound`, so the screens that do not override it
-	/// get this, and the ones that do call the manager themselves.
+	/// camera. Screens that do not override `Sound` get this, and it is called once a frame.
 	pub fn sound(&mut self, game_sound: &mut SoundManager) {
 		game_sound.play_world_sound(
 			self.camera_x,
@@ -478,12 +483,17 @@ mod tests {
 		let mut scene = Scene::new();
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
-		// A window that does not exist yet has no client area to centre the cursor in,
-		// which is the upstream `hWnd == NULL` case.
-		let window = HostWindow::default();
+		// A window that does not exist yet has no host to warp the cursor on, which is the
+		// upstream `hWnd == NULL` case.
+		let window = WindowControl::new();
+		let config = Config::new();
+		let input_ctrl = InputControl::new();
 
 		scene.framecnt = 120;
-		assert_eq!(scene.create(&mut state, &window, &mut log), 0);
+		assert_eq!(
+			scene.create(&mut state, &window, &config, &input_ctrl, &mut log),
+			0
+		);
 		assert_eq!(scene.framecnt, 0);
 		// One step from the create state, which is where the frame loop then runs the screen.
 		assert_eq!(state.get_state(), State::STATE_NOW_OPENING);

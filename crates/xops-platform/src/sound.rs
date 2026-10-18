@@ -15,17 +15,15 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Maximum number of sounds that can be loaded. `MAX_LOADSOUND`, `sound.h`.
 pub const MAX_LOADSOUND: usize = 24;
-/// Maximum number of sounds that can be played at once. `MAX_SOUNDLISTS`, `sound.h`.
-pub const MAX_SOUNDLISTS: usize = 100;
-/// Maximum distance at which a sound can be played. `MAX_SOUNDDIST`, `sound.h`.
-pub const MAX_SOUNDDIST: i32 = 335;
 
 /// Overlapping one-shot voices.
 ///
 /// Upstream DirectSound duplicates the loaded buffer `MAX_SOUNDLISTS` (100) times per
 /// sound and refuses playback when all of them are busy. The browser port replaced that
 /// with one pool of 24 for the whole game, which is the amount of overlap the game's
-/// sounds ever produce.
+/// sounds ever produce. The pool is what bounds playback here: `MAX_SOUNDLISTS` and
+/// `MAX_SOUNDDIST` are the game's constants, declared in `xops_game::sound` where the
+/// attenuation that uses them lives.
 pub const SOUNDVOICES: usize = 24;
 
 /// Sample rate the mixer runs at when there is no device to ask.
@@ -126,12 +124,12 @@ impl Mixer {
 	/// `SoundControl::PlaySound`, with the master volume already folded in by the caller.
 	///
 	/// `volume` is the upstream's -100 to 100 scale, where 100 is full scale. `pan` is
-	/// clamped and then dropped: the game's sound has no left-right placement.
+	/// taken and ignored, because there is no panning in this build.
 	///
 	/// Returns 1 when a voice was started and 0 when it was not, which is the upstream's
 	/// success and failure. A sound is refused rather than stealing a voice from another
-	/// one, which is what `sound-directsound.cpp:355` does when it finds no free buffer.
-	pub fn play(&mut self, id: i32, volume: i32, pan: i32) -> i32 {
+	/// one, which is what `sound-directsound.cpp:377` does when it finds no free buffer.
+	pub fn play(&mut self, id: i32, volume: i32, _pan: i32) -> i32 {
 		if id < 0 || MAX_LOADSOUND as i32 <= id {
 			return 0;
 		}
@@ -139,10 +137,6 @@ impl Mixer {
 		if !self.slots[slot].used || self.slots[slot].samples.is_empty() {
 			return 0;
 		}
-
-		// Clamped for parity with the upstream, then dropped: the manual's sound has no
-		// panning.
-		let _pan = pan.clamp(-100, 100);
 
 		let Some(voice) = self.voices.iter().position(|voice| !voice.active) else {
 			return 0;
@@ -340,7 +334,7 @@ pub fn decode_wav(data: &[u8], rate: u32) -> Option<Vec<i16>> {
 /// Opening can fail, and a build or test machine has no device at all. That is not
 /// something the game can act on: the slot bookkeeping keeps working so the ids stay
 /// valid, and playback reports success without a stream, which is the shape
-/// `port/sound-sdl2.cpp:296` used for the browser's blocked WebAudio.
+/// `port/sound-sdl2.cpp:284` used for the browser's blocked WebAudio.
 pub struct SoundOutput {
 	mixer: Arc<Mutex<Mixer>>,
 	stream: Option<cpal::Stream>,
@@ -353,14 +347,9 @@ impl SoundOutput {
 		let mixer = Arc::new(Mutex::new(Mixer::new(SAMPLE_RATE)));
 		let stream = attach_device(&mixer);
 		if stream.is_none() {
-			eprintln!("[xops] no audio output device, sounds will not be heard");
+			eprintln!("[xops] no usable audio output device, sounds will not be heard");
 		}
 		SoundOutput { mixer, stream }
-	}
-
-	/// Is there a device behind this?
-	pub fn is_available(&self) -> bool {
-		self.stream.is_some()
 	}
 
 	/// The rate the mixer runs at, which is the device's once a device was found.
@@ -649,6 +638,21 @@ mod tests {
 		let mut out = vec![0i16; 2 * CHANNELS];
 		mixer.mix(&mut out);
 		assert_eq!(out, vec![i16::MAX; 4]);
+	}
+
+	#[test]
+	fn the_output_opens_with_or_without_a_device() {
+		// This is the only path that touches the OS, and whether a device exists depends
+		// on the machine, so the test asserts what holds either way: opening never fails,
+		// the sound still loads, and playing it reports success because a machine without
+		// a device does not report failures the game cannot act on.
+		let output = SoundOutput::open();
+		let id = output.load_wav(&one_note_wav(1000, 64)).expect("load");
+		assert_eq!(output.total_sounds(), 1);
+		assert_eq!(output.play(id as i32, -100, 0), 1);
+		output.cleanup(id as i32);
+		assert_eq!(output.total_sounds(), 0);
+		assert!(output.sample_rate() >= 8000);
 	}
 
 	#[test]
