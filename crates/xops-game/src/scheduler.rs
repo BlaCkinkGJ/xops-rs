@@ -13,9 +13,9 @@
 
 use crate::briefing::{Briefing, Result};
 use crate::config::Config;
+use crate::d3dgraphics::D3DGraphics;
 use crate::datafile::MIFInterface;
 use crate::debug::DebugLog;
-use crate::d3dgraphics::D3DGraphics;
 use crate::gamemain::World;
 use crate::gamemenu::{MainMenu, Opening};
 use crate::input::InputControl;
@@ -130,7 +130,6 @@ pub fn process_screen<'a>(
 ) {
 	match state.get_state() {
 		// -- the opening screen -------------------------------------------------
-
 		State::STATE_CREATE_OPENING => {
 			let mut screen = Opening::new(take_world(stage));
 			let error = screen.create(state, window, config, input_ctrl, log, d3dg, sound);
@@ -167,7 +166,6 @@ pub fn process_screen<'a>(
 		}
 
 		// -- the menu screen ----------------------------------------------------
-
 		State::STATE_CREATE_MENU => {
 			let mut screen = MainMenu::new(take_world(stage));
 			let error = screen.create(state, window, config, input_ctrl, log, d3dg, sound);
@@ -187,7 +185,9 @@ pub fn process_screen<'a>(
 		State::STATE_NOW_MENU => {
 			if let Some(Stage::Menu(screen)) = stage {
 				screen.input(input_ctrl, input, state, log, config);
-				screen.process(d3dg, config, window, input_ctrl, input, log, sound, sound_ctrl);
+				screen.process(
+					d3dg, config, window, input_ctrl, input, log, sound, sound_ctrl,
+				);
 				screen.sound(sound, sound_ctrl);
 				if draws_this_frame(config, framecnt) && screen.render_main(d3dg, config) {
 					reset_game(&mut screen.world, d3dg);
@@ -203,7 +203,6 @@ pub fn process_screen<'a>(
 		}
 
 		// -- the briefing screen ------------------------------------------------
-
 		State::STATE_CREATE_BRIEFING => {
 			// The world is read here and then kept beside the screen, because the screen
 			// does not reach into it again.
@@ -258,10 +257,11 @@ pub fn process_screen<'a>(
 		}
 
 		// -- the game screen ----------------------------------------------------
-
 		State::STATE_CREATE_MAINGAME => {
 			let mut screen = MainGame::new(take_world(stage));
-			let error = screen.create(state, window, config, input_ctrl, log, d3dg, sound, sound_ctrl);
+			let error = screen.create(
+				state, window, config, input_ctrl, log, d3dg, sound, sound_ctrl,
+			);
 			if error != 0 {
 				if error & 0x0001 != 0 {
 					window.error_info(b"block data open failed");
@@ -298,7 +298,6 @@ pub fn process_screen<'a>(
 		}
 
 		// -- the result screen --------------------------------------------------
-
 		State::STATE_CREATE_RESULT => {
 			// No error handling upstream either: the result screen has nothing to open.
 			let mut world = take_world(stage);
@@ -327,7 +326,6 @@ pub fn process_screen<'a>(
 		}
 
 		// -- exit ---------------------------------------------------------------
-
 		State::STATE_EXIT => {
 			window.close_window();
 		}
@@ -392,7 +390,10 @@ mod tests {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
 		world.game_info.selectmission_id = 0;
-		assert!(world.mif.is_none(), "the menu leaves no mission file behind");
+		assert!(
+			world.mif.is_none(),
+			"the menu leaves no mission file behind"
+		);
 
 		// The state the menu's selection leads to.
 		state.set_state_mode(1);

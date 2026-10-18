@@ -31,8 +31,8 @@ use crate::datafile::{
 use crate::object::{HUMAN_HEIGHT, HUMAN_MAPCOLLISION_HEIGHT, HUMAN_MAPCOLLISION_R};
 use crate::objectmanager::{ObjectManager, MAX_HUMAN, VIEW_HEIGHT};
 use crate::parameter::{
-	AIParameter, HumanParameter, ParameterInfo, ScopeParameter, ID_WEAPON_CASE,
-	ID_WEAPON_GRENADE, ID_WEAPON_NONE, SCOPE_PARAMETER_0, TOTAL_PARAMETERINFO_AILEVEL,
+	AIParameter, HumanParameter, ParameterInfo, ScopeParameter, ID_WEAPON_CASE, ID_WEAPON_GRENADE,
+	ID_WEAPON_NONE, SCOPE_PARAMETER_0, TOTAL_PARAMETERINFO_AILEVEL,
 };
 use crate::resource::ResourceManager;
 use crate::soundmanager::{SoundManager, Soundlist, MAX_SOUNDMGR_LIST};
@@ -405,7 +405,11 @@ impl AIcontrol {
 		if !self.move_navi.get_run2()
 			&& (self.battlemode == AiMode::AiAction || self.battlemode == AiMode::AiCaution)
 		{
-			return (self.cautionback_posx, self.cautionback_posz, target.movemode);
+			return (
+				self.cautionback_posx,
+				self.cautionback_posz,
+				target.movemode,
+			);
 		}
 
 		(target.posx, target.posz, target.movemode)
@@ -868,7 +872,8 @@ impl AIcontrol {
 			self.obj_driver.set_mode_flag(AI_CTRL_TURNLEFT);
 		}
 
-		if self.battlemode == AiMode::AiNormal && target.pointmode == AiMoveNaviFlag::AiNaviPointWait
+		if self.battlemode == AiMode::AiNormal
+			&& target.pointmode == AiMoveNaviFlag::AiNaviPointWait
 		{
 			// Randomly try to face toward the point, which reproduces "slightly prefer the
 			// direction of the point". A 1 in 80 draw, only while waiting on a path.
@@ -1235,7 +1240,10 @@ impl AIcontrol {
 
 			// Calculate the tolerance for judging that the enemy is captured, adjusted by
 			// the level's allowed error.
-			let sparam = self.param.get_scope_param(scopemode).unwrap_or(SCOPE_PARAMETER_0);
+			let sparam = self
+				.param
+				.get_scope_param(scopemode)
+				.unwrap_or(SCOPE_PARAMETER_0);
 			let shot_angle = self.shot_angle(&sparam, self.move_navi.get_run2());
 
 			// If the enemy is captured, fire. The draw only happens when it is.
@@ -1256,9 +1264,7 @@ impl AIcontrol {
 		if r < AI_CHECKSHORTATTACK_DIST * AI_CHECKSHORTATTACK_DIST {
 			self.longattack = false;
 		}
-		if r > AI_CHECKSHORTATTACK_DIST * AI_CHECKSHORTATTACK_DIST
-			&& !self.move_navi.get_run2()
-		{
+		if r > AI_CHECKSHORTATTACK_DIST * AI_CHECKSHORTATTACK_DIST && !self.move_navi.get_run2() {
 			self.longattack = true;
 		}
 
@@ -1284,8 +1290,7 @@ impl AIcontrol {
 			}
 			angle
 		} else {
-			sparam.ai_shot_angle_long
-				+ degree_to_radian(0.2) * self.level_param.limitserror as f32
+			sparam.ai_shot_angle_long + degree_to_radian(0.2) * self.level_param.limitserror as f32
 		}
 	}
 
@@ -1387,8 +1392,9 @@ impl AIcontrol {
 
 	/// `HaveWeapon`: holds a weapon, which is switching to one that still has ammunition.
 	fn have_weapon(&self, obj_mgr: &mut ObjectManager) -> i32 {
-		let Some((selectweapon, weapon, _, nbslist)) =
-			obj_mgr.get_human_object(self.ctrlid).map(|h| h.get_weapon())
+		let Some((selectweapon, weapon, _, nbslist)) = obj_mgr
+			.get_human_object(self.ctrlid)
+			.map(|h| h.get_weapon())
 		else {
 			return 0;
 		};
@@ -1504,8 +1510,9 @@ impl AIcontrol {
 		d3dg: &D3DGraphics,
 		resource: &ResourceManager,
 	) -> i32 {
-		let Some((selectweapon, weapon, _, _)) =
-			obj_mgr.get_human_object(self.ctrlid).map(|h| h.get_weapon())
+		let Some((selectweapon, weapon, _, _)) = obj_mgr
+			.get_human_object(self.ctrlid)
+			.map(|h| h.get_weapon())
 		else {
 			return 0;
 		};
@@ -1800,36 +1807,42 @@ impl AIcontrol {
 
 		// Set the enemy search count and the search range, which is a distance and two
 		// pairs of angles.
-		let (searchloops, max_dist, a_rx, a_ry, b_rx, b_ry) =
-			if self.battlemode == AiMode::AiNormal {
-				let searchloops = self.level_param.search * AI_TOTALHUMAN_SCALE;
-				let sparam = self.param.get_scope_param(weaponscope).unwrap_or(SCOPE_PARAMETER_0);
-				let max_dist = sparam.ai_add_search_enemy_max_dist_normal
-					+ 12.0 * (self.level_param.search - 2) as f32
-					+ 350.0;
-				(
-					searchloops,
-					max_dist,
-					degree_to_radian(110.0),
-					degree_to_radian(60.0),
-					degree_to_radian(60.0),
-					degree_to_radian(40.0),
-				)
-			} else {
-				let searchloops = self.level_param.search * AI_TOTALHUMAN_SCALE + 4;
-				let sparam = self.param.get_scope_param(weaponscope).unwrap_or(SCOPE_PARAMETER_0);
-				let max_dist = sparam.ai_add_search_enemy_max_dist_caution
-					+ 15.0 * (self.level_param.search - 2) as f32
-					+ 420.0;
-				(
-					searchloops,
-					max_dist,
-					degree_to_radian(130.0),
-					degree_to_radian(80.0),
-					degree_to_radian(80.0),
-					degree_to_radian(50.0),
-				)
-			};
+		let (searchloops, max_dist, a_rx, a_ry, b_rx, b_ry) = if self.battlemode == AiMode::AiNormal
+		{
+			let searchloops = self.level_param.search * AI_TOTALHUMAN_SCALE;
+			let sparam = self
+				.param
+				.get_scope_param(weaponscope)
+				.unwrap_or(SCOPE_PARAMETER_0);
+			let max_dist = sparam.ai_add_search_enemy_max_dist_normal
+				+ 12.0 * (self.level_param.search - 2) as f32
+				+ 350.0;
+			(
+				searchloops,
+				max_dist,
+				degree_to_radian(110.0),
+				degree_to_radian(60.0),
+				degree_to_radian(60.0),
+				degree_to_radian(40.0),
+			)
+		} else {
+			let searchloops = self.level_param.search * AI_TOTALHUMAN_SCALE + 4;
+			let sparam = self
+				.param
+				.get_scope_param(weaponscope)
+				.unwrap_or(SCOPE_PARAMETER_0);
+			let max_dist = sparam.ai_add_search_enemy_max_dist_caution
+				+ 15.0 * (self.level_param.search - 2) as f32
+				+ 420.0;
+			(
+				searchloops,
+				max_dist,
+				degree_to_radian(130.0),
+				degree_to_radian(80.0),
+				degree_to_radian(80.0),
+				degree_to_radian(50.0),
+			)
+		};
 
 		// Search for enemies the specified number of times. Each pass draws the person to
 		// look at, and a second draw decides whether a long range sighting is taken.
@@ -1854,8 +1867,7 @@ impl AIcontrol {
 
 			if self
 				.check_look_enemy(obj_mgr, blocks, coll_d, targetid, b_rx, b_ry, max_dist)
-				.is_some()
-				&& get_rand(4) == 0
+				.is_some() && get_rand(4) == 0
 			{
 				self.longattack = !self.move_navi.get_run2();
 				return 2;
@@ -2696,9 +2708,7 @@ impl AIMoveNavi {
 	/// The coordinates are not updated here: call [`Self::move_path_now_state`] first.
 	pub fn get_target_pos(&self) -> TargetPos {
 		let movemode = match self.movemode {
-			AiMode::AiWalk | AiMode::AiWait | AiMode::AiStop5Sec => {
-				AiMoveNaviFlag::AiNaviMoveWalk
-			}
+			AiMode::AiWalk | AiMode::AiWait | AiMode::AiStop5Sec => AiMoveNaviFlag::AiNaviMoveWalk,
 			AiMode::AiRun => AiMoveNaviFlag::AiNaviMoveRun,
 			AiMode::AiRun2 => AiMoveNaviFlag::AiNaviMoveRun2,
 			AiMode::AiTracking => AiMoveNaviFlag::AiNaviMoveTracking,
@@ -2859,10 +2869,10 @@ impl AIObjectDriver {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::atomic::{AtomicU64, Ordering};
 	use crate::datafile::TOTAL_BLOCKTEXTURE;
 	use std::fs;
 	use std::path::PathBuf;
+	use std::sync::atomic::{AtomicU64, Ordering};
 
 	// --- helpers ---------------------------------------------------------
 
@@ -2900,7 +2910,9 @@ mod tests {
 		ry: f32,
 		p4: i16,
 	) {
-		let human = mgr.get_human_object_mut(id).expect("the pool holds every slot");
+		let human = mgr
+			.get_human_object_mut(id)
+			.expect("the pool holds every slot");
 		human.set_pos_data(x, y, z, rx);
 		// `init` resets the arm angle, so the angles go in after the settings.
 		human.set_param_data(0, 0, p4, team, true);
@@ -2983,7 +2995,10 @@ mod tests {
 	}
 
 	/// Loads a point data file the way a mission load does.
-	fn load_points(name: &str, points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
+	fn load_points(
+		name: &str,
+		points: &[(f32, f32, f32, f32, i8, i8, i8, i8)],
+	) -> PointDataInterface {
 		let path = temp_path(name);
 		xops_platform::fs::write_file(&path, &pd1_image(points)).expect("write the temp points");
 
@@ -3003,11 +3018,13 @@ mod tests {
 	/// A renderer with no window and no surface, the same shape the object manager's own
 	/// tests use. Only the paths that have to touch the renderer get one.
 	fn headless() -> D3DGraphics {
-		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
-			backends: xops_platform::wgpu::Backends::all(),
-			..Default::default()
-		});
-		let gfx = xops_platform::gfx::Gfx::new(&instance, None, 64, 48, None).expect("a headless renderer");
+		let instance =
+			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+				backends: xops_platform::wgpu::Backends::all(),
+				..Default::default()
+			});
+		let gfx = xops_platform::gfx::Gfx::new(&instance, None, 64, 48, None)
+			.expect("a headless renderer");
 		D3DGraphics::new(gfx, false, 0)
 	}
 
@@ -3043,17 +3060,20 @@ mod tests {
 		// (100 sin t, 0, 100 cos t) reads as the angle t from the +Z the AI faces.
 		for (angle, expected) in [(54.9f32, true), (55.1, false)] {
 			let t = degree_to_radian(angle);
-			place_human(&mut mgr, 1, 100.0 * t.sin(), 0.0, 100.0 * t.cos(), 2, 0.0, 0.0, 1);
-
-			let seen = ai.check_look_enemy(
-				&mgr,
-				&blocks,
-				&coll_d,
+			place_human(
+				&mut mgr,
 				1,
-				AI_SEARCH_RX,
-				AI_SEARCH_RY,
-				620.0,
+				100.0 * t.sin(),
+				0.0,
+				100.0 * t.cos(),
+				2,
+				0.0,
+				0.0,
+				1,
 			);
+
+			let seen =
+				ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0);
 			assert_eq!(seen.is_some(), expected, "horizontal angle {angle}");
 			if expected {
 				// The distance comes back as the upstream's out_minDist.
@@ -3068,15 +3088,8 @@ mod tests {
 			let h = 100.0 * degree_to_radian(angle).tan();
 			place_human(&mut mgr, 1, 0.0, h, 100.0, 2, 0.0, 0.0, 1);
 
-			let seen = ai.check_look_enemy(
-				&mgr,
-				&blocks,
-				&coll_d,
-				1,
-				AI_SEARCH_RX,
-				AI_SEARCH_RY,
-				620.0,
-			);
+			let seen =
+				ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0);
 			assert_eq!(seen.is_some(), expected, "vertical angle {angle}");
 		}
 
@@ -3088,7 +3101,10 @@ mod tests {
 
 		// A person out of use is not looked at either.
 		place_human(&mut mgr, 1, 0.0, 0.0, 100.0, 2, 0.0, 0.0, 1);
-		mgr.get_human_object_mut(1).unwrap().object.set_enable_flag(false);
+		mgr.get_human_object_mut(1)
+			.unwrap()
+			.object
+			.set_enable_flag(false);
 		assert!(ai
 			.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0)
 			.is_none());
@@ -3108,15 +3124,8 @@ mod tests {
 		for (distance, expected) in [(99.9f32, true), (100.0, true), (100.1, false)] {
 			place_human(&mut mgr, 1, 0.0, 0.0, distance, 2, 0.0, 0.0, 1);
 
-			let seen = ai.check_look_enemy(
-				&mgr,
-				&blocks,
-				&coll_d,
-				1,
-				AI_SEARCH_RX,
-				AI_SEARCH_RY,
-				100.0,
-			);
+			let seen =
+				ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 100.0);
 			assert_eq!(seen.is_some(), expected, "distance {distance}");
 		}
 
@@ -3153,7 +3162,8 @@ mod tests {
 		// The same map and the same distance, with the target off to the side so the ray
 		// passes beside the cube, is a sighting.
 		place_human(&mut mgr, 1, 10.0, 0.0, 5.0, 2, 0.0, 0.0, 1);
-		let seen = ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0);
+		let seen =
+			ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0);
 		assert!(seen.is_some());
 		assert!((seen.unwrap() - (425.0f32).sqrt()).abs() < 1e-3);
 	}
@@ -3197,8 +3207,16 @@ mod tests {
 		let eight = degree_to_radian(8.0);
 		assert!(AIcontrol::captured(degree_to_radian(7.9), 0.0, eight));
 		assert!(!AIcontrol::captured(degree_to_radian(8.1), 0.0, eight));
-		assert!(AIcontrol::captured(degree_to_radian(4.0), degree_to_radian(3.9), eight));
-		assert!(!AIcontrol::captured(degree_to_radian(4.0), degree_to_radian(4.1), eight));
+		assert!(AIcontrol::captured(
+			degree_to_radian(4.0),
+			degree_to_radian(3.9),
+			eight
+		));
+		assert!(!AIcontrol::captured(
+			degree_to_radian(4.0),
+			degree_to_radian(4.1),
+			eight
+		));
 	}
 
 	// --- the reaction delay ----------------------------------------------
@@ -3225,7 +3243,9 @@ mod tests {
 
 		// Down to a hundred there is no early end, so it is exactly one a frame.
 		for _ in 0..60 {
-			frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+			frame(
+				&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+			);
 		}
 		assert_eq!(ai.cautioncnt, 100);
 		assert_eq!(ai.battlemode, AiMode::AiCaution);
@@ -3235,7 +3255,9 @@ mod tests {
 		let mut previous = ai.cautioncnt;
 		let mut frames = 0;
 		while ai.battlemode == AiMode::AiCaution && frames < 400 {
-			frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+			frame(
+				&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+			);
 			assert!(
 				ai.cautioncnt <= previous,
 				"caution rose from {previous} to {}",
@@ -3347,7 +3369,10 @@ mod tests {
 				other => panic!("the fork landed on {other}"),
 			}
 		}
-		assert!(saw_left && saw_right, "both branches of the fork were taken");
+		assert!(
+			saw_left && saw_right,
+			"both branches of the fork were taken"
+		);
 	}
 
 	/// A tracking point follows the person it names, refreshing every frame.
@@ -3374,7 +3399,9 @@ mod tests {
 		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointTracking);
 
 		// The person walks, and the next frame picks the new position up.
-		mgr.get_human_object_mut(2).unwrap().set_pos_data(7.0, 0.0, 9.0, 0.25);
+		mgr.get_human_object_mut(2)
+			.unwrap()
+			.set_pos_data(7.0, 0.0, 9.0, 0.25);
 		assert!(ai.move_navi.move_path_now_state(&mgr, &points));
 		let target = ai.move_navi.get_target_pos();
 		assert_eq!((target.posx, target.posz, target.rx), (7.0, 9.0, 0.25));
@@ -3413,7 +3440,9 @@ mod tests {
 			.unwrap()
 			.set_param_data(-1, 0, 0, 1, true);
 		assert!(mgr.get_human_object(0).unwrap().hp() <= 0);
-		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		frame(
+			&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+		);
 		assert_eq!(ai.battlemode, AiMode::AiDead);
 		assert_eq!(ai.get_battle_mode(), (0, &b"AI_DEAD"[..]));
 
@@ -3422,12 +3451,16 @@ mod tests {
 			.unwrap()
 			.set_param_data(0, 0, 0, 1, true);
 		assert!(mgr.get_human_object(0).unwrap().hp() > 0);
-		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		frame(
+			&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+		);
 		assert_eq!(ai.battlemode, AiMode::AiNormal);
 
 		// Being hit in normal mode starts caution, and points the AI at the shot.
 		mgr.get_human_object_mut(0).unwrap().set_hit_flag(1.25);
-		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		frame(
+			&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+		);
 		assert_eq!(ai.battlemode, AiMode::AiCaution);
 		assert_eq!(ai.cautioncnt, 160);
 		assert!(ai.face_caution_flag);
@@ -3438,7 +3471,9 @@ mod tests {
 		// restarted.
 		ai.enemy_human_id = Some(1);
 		ai.actioncnt = 999;
-		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		frame(
+			&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+		);
 		assert_eq!(ai.battlemode, AiMode::AiAction);
 		assert_eq!(ai.actioncnt, 0);
 		assert_eq!(ai.get_enemy_human_id(), 1);
@@ -3446,7 +3481,9 @@ mod tests {
 		// The non-combat switch ends an attack at once, and an attack that ends without
 		// priority running falls back to caution with a fresh count.
 		ai.set_no_fight_flag(true);
-		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		frame(
+			&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config,
+		);
 		assert_eq!(ai.battlemode, AiMode::AiCaution);
 		assert_eq!(ai.cautioncnt, 160);
 		assert_eq!(ai.get_enemy_human_id(), -1);

@@ -467,7 +467,8 @@ mod tests {
 		needle.extend_from_slice(env.name.as_bytes());
 
 		assert!(
-			text.windows(needle.len()).any(|window| window == needle.as_slice()),
+			text.windows(needle.len())
+				.any(|window| window == needle.as_slice()),
 			"the environment line is missing from the log"
 		);
 	}

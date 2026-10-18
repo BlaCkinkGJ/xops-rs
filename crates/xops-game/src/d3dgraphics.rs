@@ -103,14 +103,8 @@ impl D3DGraphics {
 			models: ModelTable::new(),
 			texture_font_fname: [0; MAX_PATH],
 			texture_font: -1,
-			hud_myweapon_x: [
-				width as f32 - 140.0,
-				width as f32 - 72.0,
-			],
-			hud_myweapon_y: [
-				height as f32 - 40.0,
-				height as f32 - 25.0,
-			],
+			hud_myweapon_x: [width as f32 - 140.0, width as f32 - 72.0],
+			hud_myweapon_y: [height as f32 - 40.0, height as f32 - 25.0],
 			hud_myweapon_z: [0.86, 0.93],
 			system_font_posz: 1.0,
 			text: None,
@@ -497,7 +491,8 @@ impl D3DGraphics {
 		);
 		let modelview = self.modelview();
 		let projection = self.projection();
-		let Some(object) = xops_platform::math::unproject(screen, &modelview, &projection, viewport)
+		let Some(object) =
+			xops_platform::math::unproject(screen, &modelview, &projection, viewport)
 		else {
 			// A singular pipeline means there is no sensible place to put the weapon, so
 			// it is left at the origin rather than somewhere arbitrary.
@@ -525,7 +520,8 @@ impl D3DGraphics {
 		let to_degrees = 180.0 / std::f32::consts::PI;
 		self.gfx.translate(object.x, object.y, object.z);
 		self.gfx.rotate(camera_rx * to_degrees, 0.0, 1.0, 0.0);
-		self.gfx.rotate(camera_ry * -1.0 * to_degrees, 0.0, 0.0, 1.0);
+		self.gfx
+			.rotate(camera_ry * -1.0 * to_degrees, 0.0, 0.0, 1.0);
 		if rotation {
 			self.gfx.rotate(rx * -1.0 * to_degrees, 0.0, 1.0, 0.0);
 		} else {
@@ -623,7 +619,8 @@ impl D3DGraphics {
 		camera_ry: f32,
 		viewangle: f32,
 	) {
-		self.gfx.viewport(0, 0, self.width as u32, self.height as u32);
+		self.gfx
+			.viewport(0, 0, self.width as u32, self.height as u32);
 		self.camera_x = camera_x;
 		self.camera_y = camera_y;
 		self.camera_z = camera_z;
@@ -668,10 +665,11 @@ mod tests {
 	use crate::core::degree_to_radian;
 
 	fn headless() -> D3DGraphics {
-		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
-			backends: xops_platform::wgpu::Backends::all(),
-			..Default::default()
-		});
+		let instance =
+			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+				backends: xops_platform::wgpu::Backends::all(),
+				..Default::default()
+			});
 		let gfx = Gfx::new(&instance, None, 64, 48, None).expect("a headless renderer");
 		D3DGraphics::new(gfx, false, 0)
 	}
@@ -693,10 +691,22 @@ mod tests {
 		// tolerance is a hundredth rather than a millionth: the reference's inputs are only
 		// known to two decimal places, so the comparison is as precise as they are.
 		const REFERENCE: [f32; 16] = [
-			0.379_133_28, 0.462_671_5, -0.801_369_5, 0.0, //
-			0.0, 0.866_025_15, 0.500_000_5, 0.0, //
-			0.925_342_1, -0.189_566_82, 0.328_338_95, 0.0, //
-			207.396_21, -2.707_754, -53.209_976, 1.0, //
+			0.379_133_28,
+			0.462_671_5,
+			-0.801_369_5,
+			0.0, //
+			0.0,
+			0.866_025_15,
+			0.500_000_5,
+			0.0, //
+			0.925_342_1,
+			-0.189_566_82,
+			0.328_338_95,
+			0.0, //
+			207.396_21,
+			-2.707_754,
+			-53.209_976,
+			1.0, //
 		];
 
 		let mut graphics = headless();
@@ -771,7 +781,11 @@ mod tests {
 		d3dg.set_size(1280, 960);
 		let (x, y, z) = d3dg.hud_weapon_offset(0);
 		assert_eq!((x, y, z), (1140.0, 920.0, 0.86), "the held weapon's place");
-		assert_eq!(d3dg.hud_weapon_offset(1), (1208.0, 935.0, 0.93), "the reserve's");
+		assert_eq!(
+			d3dg.hud_weapon_offset(1),
+			(1208.0, 935.0, 0.93),
+			"the reserve's"
+		);
 
 		d3dg.set_size(1920, 1080);
 		assert_eq!(
@@ -783,7 +797,11 @@ mod tests {
 		// A screen size of nothing is refused rather than stored, which would divide by zero
 		// in the aspect the projection uses.
 		d3dg.set_size(0, 1080);
-		assert_eq!(d3dg.hud_weapon_offset(1), (1848.0, 1055.0, 0.93), "unchanged");
+		assert_eq!(
+			d3dg.hud_weapon_offset(1),
+			(1848.0, 1055.0, 0.93),
+			"unchanged"
+		);
 	}
 
 	#[test]
@@ -824,7 +842,8 @@ mod tests {
 		let mut graphics = headless();
 		graphics.set_camera(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 		let projection = graphics.projection();
-		let far = projection.transform_vec4(xops_platform::Vec4::new(0.0, 0.0, -CLIPPINGPLANE_FAR, 1.0));
+		let far =
+			projection.transform_vec4(xops_platform::Vec4::new(0.0, 0.0, -CLIPPINGPLANE_FAR, 1.0));
 		assert!((far.z / far.w - 1.0).abs() < 1e-3, "{}", far.z / far.w);
 	}
 
@@ -834,10 +853,7 @@ mod tests {
 		// Sky 2 is the night mission, and its haze is darker than a plain black clear.
 		graphics.set_fog(true, 2);
 		assert!(graphics.gfx_ref().fog_enabled());
-		assert_eq!(
-			graphics.gfx_ref().fog_colour(),
-			[0.0625, 0.0625, 0.0625]
-		);
+		assert_eq!(graphics.gfx_ref().fog_colour(), [0.0625, 0.0625, 0.0625]);
 		// A sky number outside the table is black rather than a panic.
 		graphics.set_fog(true, 99);
 		assert_eq!(graphics.gfx_ref().fog_colour(), [0.0, 0.0, 0.0]);
@@ -875,8 +891,14 @@ mod tests {
 		// These are what place the held weapon on screen, so they have to follow the
 		// window rather than being fixed numbers.
 		let graphics = headless();
-		assert_eq!(graphics.hud_weapon_offset(0), (64.0 - 140.0, 48.0 - 40.0, 0.86));
-		assert_eq!(graphics.hud_weapon_offset(1), (64.0 - 72.0, 48.0 - 25.0, 0.93));
+		assert_eq!(
+			graphics.hud_weapon_offset(0),
+			(64.0 - 140.0, 48.0 - 40.0, 0.86)
+		);
+		assert_eq!(
+			graphics.hud_weapon_offset(1),
+			(64.0 - 72.0, 48.0 - 25.0, 0.93)
+		);
 	}
 
 	#[test]
@@ -890,7 +912,10 @@ mod tests {
 		assert!(gfx.blend_enabled());
 		assert!(gfx.alpha_test_enabled());
 		// And the frame presents without an error on a headless target.
-		assert!(!graphics.end_render(), "end_render reports failure, not success");
+		assert!(
+			!graphics.end_render(),
+			"end_render reports failure, not success"
+		);
 	}
 
 	#[test]

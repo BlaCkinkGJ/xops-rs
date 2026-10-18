@@ -256,7 +256,12 @@ impl Weapon {
 			self.move_y -= 0.3;
 		}
 
-		if coll.check_all_block_inside(block_data_if, self.object.pos_x, self.object.pos_y, self.object.pos_z) {
+		if coll.check_all_block_inside(
+			block_data_if,
+			self.object.pos_x,
+			self.object.pos_y,
+			self.object.pos_z,
+		) {
 			self.motionflag = false;
 			return 0;
 		}
@@ -385,8 +390,16 @@ mod tests {
 
 	#[test]
 	fn the_last_grenade_removes_the_weapon_and_earlier_ones_reload() {
-		let mut weapon =
-			Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, ID_WEAPON_GRENADE, 3, true);
+		let mut weapon = Weapon::new(
+			ParameterInfo::new(),
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			ID_WEAPON_GRENADE,
+			3,
+			true,
+		);
 		weapon.set_param_data(ID_WEAPON_GRENADE, 1, 3, true);
 
 		// Two left after the throw: the next grenade is loaded at once.

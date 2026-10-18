@@ -8,8 +8,8 @@
 //! writes past a fixed buffer the port clamps, so every such case is noted at the site.
 //! Strings stay bytes because the texture font indexes glyphs by byte value.
 
-use xops_platform::path::resolve_case_insensitive;
 use std::path::{Path, PathBuf};
+use xops_platform::path::resolve_case_insensitive;
 
 use crate::core::{
 	degree_to_radian, get_2byte_little_endian, get_4byte_little_endian, ADDONDIR,
@@ -647,7 +647,11 @@ impl Default for BlockDataInterface {
 /// ```
 ///
 /// Either output may be left out, which is what the upstream NULL arguments do.
-pub fn blockdataface(face_id: i32, v_id: Option<&mut [i32; 4]>, uv_id: Option<&mut [i32; 4]>) -> bool {
+pub fn blockdataface(
+	face_id: i32,
+	v_id: Option<&mut [i32; 4]>,
+	uv_id: Option<&mut [i32; 4]>,
+) -> bool {
 	let (v, uv) = match face_id {
 		0 => ([1, 0, 3, 2], [2, 3, 0, 1]),
 		1 => ([6, 7, 4, 5], [2, 3, 0, 1]),
@@ -716,14 +720,9 @@ impl PointDataInterface {
 				id: i as i32,
 				..Default::default()
 			};
-			for (j, value) in [
-				&mut point.x,
-				&mut point.y,
-				&mut point.z,
-				&mut point.r,
-			]
-			.iter_mut()
-			.enumerate()
+			for (j, value) in [&mut point.x, &mut point.y, &mut point.z, &mut point.r]
+				.iter_mut()
+				.enumerate()
 			{
 				**value = f32_le(mainf.get(j * 4..j * 4 + 4).unwrap_or(&[]));
 			}
@@ -1369,7 +1368,9 @@ impl AddonList {
 	/// The upstream pattern "*.mif" is matched by the Windows API, which does not
 	/// distinguish case, so neither does this.
 	fn get_mif_list(&mut self, dir: &[u8]) {
-		let Ok(entries) = xops_platform::fs::read_dir_names(resolve_case_insensitive(&path_from_bytes(dir))) else {
+		let Ok(entries) =
+			xops_platform::fs::read_dir_names(resolve_case_insensitive(&path_from_bytes(dir)))
+		else {
 			return;
 		};
 		for entry in entries {
@@ -1874,7 +1875,9 @@ mod tests {
 		// The first byte is never the dot, so a bare extension is not a match.
 		assert!(!check_file_extension(b".bd1", b".bd1"));
 
-		assert!(check_directory(std::env::temp_dir().to_string_lossy().as_bytes()));
+		assert!(check_directory(
+			std::env::temp_dir().to_string_lossy().as_bytes()
+		));
 		assert!(!check_directory(b"no_such_directory_xyz"));
 	}
 
@@ -1903,7 +1906,10 @@ mod tests {
 		// separator and all.
 		write_cstr(&mut fname, b"addon\\map\\temp.bd1");
 		assert!(change_exe_path_to_full_path(dir, &mut fname));
-		assert_eq!(cstr(&fname), b"C:\\games\\addon\\mymission\\\\map\\temp.bd1");
+		assert_eq!(
+			cstr(&fname),
+			b"C:\\games\\addon\\mymission\\\\map\\temp.bd1"
+		);
 
 		write_cstr(&mut fname, b".\\addon\\op.pd1");
 		assert!(change_exe_path_to_full_path(dir, &mut fname));
@@ -1992,7 +1998,11 @@ mod tests {
 				assert!((0.0..=1.0).contains(&center));
 			}
 			// |light| is sqrt(1.75), so the shadow of a unit normal stays in this band.
-			assert!((0.55..=0.89).contains(&material.shadow), "shadow {}", material.shadow);
+			assert!(
+				(0.55..=0.89).contains(&material.shadow),
+				"shadow {}",
+				material.shadow
+			);
 			shadows.push(material.shadow);
 		}
 
@@ -2061,7 +2071,10 @@ mod tests {
 	#[test]
 	fn set_param_writes_the_parameters() {
 		let mut data = PointDataInterface::new();
-		let path = temp_write("setparam.pd1", &pd1_image(&[(0.0, 0.0, 0.0, 0.0, 1, 0, 0, 0)]));
+		let path = temp_write(
+			"setparam.pd1",
+			&pd1_image(&[(0.0, 0.0, 0.0, 0.0, 1, 0, 0, 0)]),
+		);
 		data.load_file_data(&path);
 		assert_eq!(data.set_param(0, 3, 4, 5, 6), 0);
 		assert_eq!(data.getdata(0).unwrap().p3, 5);
@@ -2166,12 +2179,7 @@ mod tests {
 			(b"2\n", false, true),
 			(b"3\n", true, true),
 		] {
-			let mission = [
-				&b"M\nFull\nb.bd1\np.pd1\n1\n"[..],
-				flag,
-				&b"!\n!\n!\n"[..],
-			]
-			.concat();
+			let mission = [&b"M\nFull\nb.bd1\np.pd1\n1\n"[..], flag, &b"!\n!\n!\n"[..]].concat();
 			let path = temp_write("flags.mif", &mission);
 			let mut mif = MIFInterface::new();
 			mif.load_file_data(&path, false);
@@ -2220,9 +2228,18 @@ mod tests {
 		let mut mif = MIFInterface::new();
 		assert_eq!(mif.load_file_data(&path, true), 0);
 		assert_eq!(cstr(mif.get_add_smallobject_file()), smallso.as_slice());
-		assert_eq!(cstr(mif.get_add_smallobject_model_path(0).unwrap()), b"smallso.bmp");
-		assert_eq!(cstr(mif.get_add_smallobject_texture_path(0).unwrap()), b"smallso.bmp");
-		assert_eq!(cstr(mif.get_add_smallobject_sound_path(0).unwrap()), b"so1.wav");
+		assert_eq!(
+			cstr(mif.get_add_smallobject_model_path(0).unwrap()),
+			b"smallso.bmp"
+		);
+		assert_eq!(
+			cstr(mif.get_add_smallobject_texture_path(0).unwrap()),
+			b"smallso.bmp"
+		);
+		assert_eq!(
+			cstr(mif.get_add_smallobject_sound_path(0).unwrap()),
+			b"so1.wav"
+		);
 		// The 8 bit settings are masked.
 		assert_eq!(mif.get_add_smallobject_decide(0), 200 & 0x7F);
 		assert_eq!(mif.get_add_smallobject_hp(0), 300 & 0x7F);
@@ -2251,8 +2268,16 @@ mod tests {
 		let dir = temp_path("addons");
 		let _ = std::fs::remove_dir_all(&dir);
 		std::fs::create_dir_all(&dir).expect("create temp dir");
-		xops_platform::fs::write_file(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
-		xops_platform::fs::write_file(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(
+			dir.join("b.mif"),
+			b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n",
+		)
+		.unwrap();
+		xops_platform::fs::write_file(
+			dir.join("a.MIF"),
+			b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n",
+		)
+		.unwrap();
 		xops_platform::fs::write_file(dir.join("ignored.pd1"), b"nope").unwrap();
 
 		let dir_bytes = dir.to_string_lossy().into_owned().into_bytes();
@@ -2301,14 +2326,20 @@ mod tests {
 		assert!(!ini.load_ini_file(&path), "load should succeed");
 
 		let mut error = -1;
-		assert_eq!(ini.get_ini_file_int(b"Game", b"Language", 0, Some(&mut error)), 1);
+		assert_eq!(
+			ini.get_ini_file_int(b"Game", b"Language", 0, Some(&mut error)),
+			1
+		);
 		assert_eq!(error, 0);
 		// Leading blanks and a trailing comment around the key.
 		assert_eq!(ini.get_ini_file_int(b"Game", b"ShowArm", 0, None), 2);
 		// The same key in another section has another value.
 		assert_eq!(ini.get_ini_file_int(b"Sounds", b"Language", 0, None), 9);
 		// A value that is not a number reads as zero, and the key was found.
-		assert_eq!(ini.get_ini_file_int(b"Game", b"Bad", 42, Some(&mut error)), 0);
+		assert_eq!(
+			ini.get_ini_file_int(b"Game", b"Bad", 42, Some(&mut error)),
+			0
+		);
 		assert_eq!(error, 0);
 	}
 
@@ -2320,21 +2351,33 @@ mod tests {
 		let mut ini = INIFileInterface::new();
 
 		// Not open: the default comes back with error 2.
-		assert_eq!(ini.get_ini_file_int(b"Game", b"Language", 5, Some(&mut error)), 5);
+		assert_eq!(
+			ini.get_ini_file_int(b"Game", b"Language", 5, Some(&mut error)),
+			5
+		);
 		assert_eq!(error, 2);
 
 		assert!(!ini.load_ini_file(&path));
 		// The key is not there: error 3, and the default is returned.
-		assert_eq!(ini.get_ini_file_int(b"Game", b"Missing", 7, Some(&mut error)), 7);
+		assert_eq!(
+			ini.get_ini_file_int(b"Game", b"Missing", 7, Some(&mut error)),
+			7
+		);
 		assert_eq!(error, 3);
 		// The section is not there either.
-		assert_eq!(ini.get_ini_file_int(b"Other", b"Language", 7, Some(&mut error)), 7);
+		assert_eq!(
+			ini.get_ini_file_int(b"Other", b"Language", 7, Some(&mut error)),
+			7
+		);
 		assert_eq!(error, 3);
 		// A file that cannot be opened fails, and loading twice fails too.
 		assert!(ini.load_ini_file(Path::new("no_such_config.ini")));
 		ini.release_ini_file();
 		assert!(ini.load_ini_file(Path::new("no_such_config.ini")));
-		assert_eq!(ini.get_ini_file_int(b"Game", b"Language", 5, Some(&mut error)), 5);
+		assert_eq!(
+			ini.get_ini_file_int(b"Game", b"Language", 5, Some(&mut error)),
+			5
+		);
 		assert_eq!(error, 2);
 	}
 
@@ -2347,10 +2390,19 @@ mod tests {
 		let mut error = 0;
 
 		// The trailing f that marks a single precision literal is dropped.
-		assert_eq!(ini.get_ini_file_float(b"Game", b"Float", 1.0, Some(&mut error)), 1.5);
+		assert_eq!(
+			ini.get_ini_file_float(b"Game", b"Float", 1.0, Some(&mut error)),
+			1.5
+		);
 		assert_eq!(error, 0);
-		assert_eq!(ini.get_ini_file_float(b"Sounds", b"MasterVolume", 1.0, None), 0.75);
-		assert_eq!(ini.get_ini_file_float(b"Game", b"Missing", 0.25, Some(&mut error)), 0.25);
+		assert_eq!(
+			ini.get_ini_file_float(b"Sounds", b"MasterVolume", 1.0, None),
+			0.75
+		);
+		assert_eq!(
+			ini.get_ini_file_float(b"Game", b"Missing", 0.25, Some(&mut error)),
+			0.25
+		);
 		assert_eq!(error, 3);
 
 		assert!(ini.get_ini_file_bool(b"Game", b"Toggle", false, Some(&mut error)));
@@ -2375,7 +2427,8 @@ mod tests {
 		);
 		// A key that is missing leaves the default.
 		assert_eq!(
-			ini.get_ini_file_string(b"Game", b"Missing", b"fallback").as_slice(),
+			ini.get_ini_file_string(b"Game", b"Missing", b"fallback")
+				.as_slice(),
 			b"fallback".as_slice()
 		);
 		// A value is not truncated by the string getter, but the typed getters read
@@ -2388,7 +2441,10 @@ mod tests {
 		xops_platform::fs::write_file(&path, &long_ini).unwrap();
 		ini.release_ini_file();
 		ini.load_ini_file(&path);
-		assert_eq!(ini.get_ini_file_string(b"Sounds", b"Long", b"").len(), long.len());
+		assert_eq!(
+			ini.get_ini_file_string(b"Sounds", b"Long", b"").len(),
+			long.len()
+		);
 		let (value, error) = ini.resolve(b"Sounds", b"Long", b"d", 64);
 		assert_eq!(error, 0);
 		assert_eq!(value.len(), 63);
@@ -2397,7 +2453,8 @@ mod tests {
 	#[test]
 	fn ini_without_a_section_stops_at_the_first_header() {
 		let path = temp_path("nosection.ini");
-		xops_platform::fs::write_file(&path, b"Top = 4\n[Game]\nLanguage = 1\n").expect("write ini");
+		xops_platform::fs::write_file(&path, b"Top = 4\n[Game]\nLanguage = 1\n")
+			.expect("write ini");
 		let mut ini = INIFileInterface::new();
 		ini.load_ini_file(&path);
 

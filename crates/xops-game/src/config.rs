@@ -135,7 +135,11 @@ impl Config {
 	/// The log is a parameter because the upstream writes to a file scope `OutputLog`.
 	pub fn load_file(&mut self, path: impl AsRef<Path>, log: &mut DebugLog) -> i32 {
 		let path = path.as_ref();
-		log.write_log(LOG_LOAD, b"Config File", path.as_os_str().as_encoded_bytes());
+		log.write_log(
+			LOG_LOAD,
+			b"Config File",
+			path.as_os_str().as_encoded_bytes(),
+		);
 
 		let Ok(data) = xops_platform::fs::read_file(path) else {
 			return 1;
@@ -150,7 +154,11 @@ impl Config {
 	/// Writes the configuration file. Returns 0 on success, 1 on failure.
 	pub fn save_file(&self, path: impl AsRef<Path>, log: &mut DebugLog) -> i32 {
 		let path = path.as_ref();
-		log.write_log(LOG_LOAD, b"Config File (Save)", path.as_os_str().as_encoded_bytes());
+		log.write_log(
+			LOG_LOAD,
+			b"Config File (Save)",
+			path.as_os_str().as_encoded_bytes(),
+		);
 
 		if xops_platform::fs::write_file(path, &self.save_to_bytes()).is_err() {
 			return 1;
@@ -162,7 +170,11 @@ impl Config {
 
 	/// The body of `LoadFile`, over bytes rather than a file.
 	pub fn load_from_bytes(&mut self, data: &[u8]) {
-		let mut cur = FileCursor { data, pos: 0, last: 0 };
+		let mut cur = FileCursor {
+			data,
+			pos: 0,
+			last: 0,
+		};
 
 		for slot in self.keycode.iter_mut() {
 			*slot = cur.next_int();
@@ -525,7 +537,11 @@ impl Config {
 	/// here instead of reading anything, and reads as zero either way.
 	pub fn load_ext_file(&mut self, path: impl AsRef<Path>, log: &mut DebugLog) -> i32 {
 		let path = path.as_ref();
-		log.write_log(LOG_LOAD, b"Config File (.ini)", path.as_os_str().as_encoded_bytes());
+		log.write_log(
+			LOG_LOAD,
+			b"Config File (.ini)",
+			path.as_os_str().as_encoded_bytes(),
+		);
 
 		let mut ini = INIFileInterface::new();
 		ini.load_ini_file(path);
@@ -536,8 +552,8 @@ impl Config {
 		self.show_arm_flag = mode != 0;
 
 		// The ini's own default, which is a mode number rather than a size. Three is
-	// 1280x960, the largest of the four the original offered.
-	let mode = ini.get_ini_file_int(b"Graphics", b"WindowSize", 3, None);
+		// 1280x960, the largest of the four the original offered.
+		let mode = ini.get_ini_file_int(b"Graphics", b"WindowSize", 3, None);
 		(self.screen_width, self.screen_height) = match mode {
 			0 => (640, 480),
 			1 => (800, 600),
@@ -779,7 +795,10 @@ mod tests {
 		}
 		assert_eq!(config.get_mouse_sensitivity(), 0x22);
 		assert!(config.get_fullscreen_flag());
-		assert_eq!(config.get_player_name(&mut [0u8; MAX_PLAYERNAME + 1]), MAX_PLAYERNAME as i32);
+		assert_eq!(
+			config.get_player_name(&mut [0u8; MAX_PLAYERNAME + 1]),
+			MAX_PLAYERNAME as i32
+		);
 	}
 
 	#[test]
@@ -788,7 +807,10 @@ mod tests {
 
 		config.set_player_name(b"a name that is far too long for the field");
 		let mut name = [0u8; MAX_PLAYERNAME + 1];
-		assert_eq!(config.get_player_name(&mut name), (MAX_PLAYERNAME - 1) as i32);
+		assert_eq!(
+			config.get_player_name(&mut name),
+			(MAX_PLAYERNAME - 1) as i32
+		);
 		assert_eq!(&name[..MAX_PLAYERNAME - 1], b"a name that is far t");
 		assert_eq!(name[MAX_PLAYERNAME - 1], 0x00);
 
@@ -841,7 +863,10 @@ mod tests {
 		config.set_player_name(b"nametest");
 
 		assert_eq!(config.save_file(&path, &mut log), 0);
-		assert_eq!(xops_platform::fs::read_file(&path).unwrap().len() as u64, CONFIG_FILE_SIZE as u64);
+		assert_eq!(
+			xops_platform::fs::read_file(&path).unwrap().len() as u64,
+			CONFIG_FILE_SIZE as u64
+		);
 
 		let mut loaded = Config::new();
 		assert_eq!(loaded.load_file(&path, &mut log), 0);
@@ -849,12 +874,18 @@ mod tests {
 		for id in 0..TOTAL_ControlKey as i32 {
 			assert_eq!(loaded.get_keycode(id), config.get_keycode(id), "key {id}");
 		}
-		assert_eq!(loaded.get_mouse_sensitivity(), config.get_mouse_sensitivity());
+		assert_eq!(
+			loaded.get_mouse_sensitivity(),
+			config.get_mouse_sensitivity()
+		);
 		assert_eq!(loaded.get_fullscreen_flag(), config.get_fullscreen_flag());
 		assert_eq!(loaded.get_sound_flag(), config.get_sound_flag());
 		assert_eq!(loaded.get_blood_flag(), config.get_blood_flag());
 		assert_eq!(loaded.get_brightness(), config.get_brightness());
-		assert_eq!(loaded.get_invert_mouse_flag(), config.get_invert_mouse_flag());
+		assert_eq!(
+			loaded.get_invert_mouse_flag(),
+			config.get_invert_mouse_flag()
+		);
 		assert_eq!(loaded.get_frameskip_flag(), config.get_frameskip_flag());
 		assert_eq!(
 			loaded.get_another_gunsight_flag(),
@@ -973,7 +1004,11 @@ mod tests {
 
 		let mut config = Config::new();
 		for (mode, width, height) in expected {
-			xops_platform::fs::write_file(&path, format!("[Graphics]\nWindowSize = {mode}\n").as_bytes()).unwrap();
+			xops_platform::fs::write_file(
+				&path,
+				format!("[Graphics]\nWindowSize = {mode}\n").as_bytes(),
+			)
+			.unwrap();
 			config.load_ext_file(&path, &mut log);
 			assert_eq!(config.get_screen_width(), width, "mode {mode}");
 			assert_eq!(config.get_screen_height(), height, "mode {mode}");

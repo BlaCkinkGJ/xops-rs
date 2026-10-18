@@ -152,7 +152,8 @@ impl InputControl {
 		input.set_captured(mousemode);
 
 		let (x, y) = input.mouse_position();
-		let (movement_x, movement_y) = input.take_mouse_movement(self.mouse_limit_flag && mousemode);
+		let (movement_x, movement_y) =
+			input.take_mouse_movement(self.mouse_limit_flag && mousemode);
 		if mousemode {
 			self.mx = movement_x;
 			self.my = movement_y;

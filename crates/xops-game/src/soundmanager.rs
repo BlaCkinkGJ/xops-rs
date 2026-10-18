@@ -437,8 +437,7 @@ impl SoundManager {
 
 			if getlist[i].paramid == SoundmgrID::Bullet {
 				// Where the bullet came closest to the listener.
-				let Some((min_x, min_y, min_z)) =
-					check_approach(&getlist[i], pos_x, pos_y, pos_z)
+				let Some((min_x, min_y, min_z)) = check_approach(&getlist[i], pos_x, pos_y, pos_z)
 				else {
 					continue;
 				};
@@ -616,7 +615,11 @@ impl SoundManager {
 			SoundmgrID::HitMap => {
 				// The upstream passes NULL for the four sounds this one does not use.
 				let (hitsound_a, hitsound_b, ..) = resource.get_bullet_sound();
-				id = if get_rand(3) == 0 { hitsound_b } else { hitsound_a };
+				id = if get_rand(3) == 0 {
+					hitsound_b
+				} else {
+					hitsound_a
+				};
 				volume = MAX_SOUNDHITMAP;
 			}
 
@@ -638,7 +641,8 @@ impl SoundManager {
 
 			// bullet sound, passing sound
 			SoundmgrID::Bullet => {
-				let Some((new_x, new_y, new_z)) = check_approach(plist, camera_x, camera_y, camera_z)
+				let Some((new_x, new_y, new_z)) =
+					check_approach(plist, camera_x, camera_y, camera_z)
 				else {
 					return;
 				};
@@ -649,13 +653,7 @@ impl SoundManager {
 				}
 
 				let (_, _, _, passing_sound, ..) = resource.get_bullet_sound();
-				sound_ctrl.play_3d_sound(
-					passing_sound,
-					new_x,
-					new_y,
-					new_z,
-					MAX_SOUNDPASSING,
-				);
+				sound_ctrl.play_3d_sound(passing_sound, new_x, new_y, new_z, MAX_SOUNDPASSING);
 				return;
 			}
 
@@ -735,9 +733,10 @@ fn check_approach(
 	// Only when the current position is the closest of the three.
 	if dist1 > dist2 && dist2 < dist3 {
 		// Find the movement speed.
-		let speed =
-			(plist.move_x * plist.move_x + plist.move_y * plist.move_y + plist.move_z * plist.move_z)
-				.sqrt();
+		let speed = (plist.move_x * plist.move_x
+			+ plist.move_y * plist.move_y
+			+ plist.move_z * plist.move_z)
+			.sqrt();
 
 		// Find the coordinate of the shortest distance.
 		let min_dist = distance_pos_ray(
@@ -904,12 +903,18 @@ mod tests {
 		// At 34 units: forward carries 40 and sideways 35, but backward only 30, and the
 		// same team's copy is skipped outright.
 		let mut out = [Soundlist::default(); MAX_SOUNDMGR_LIST];
-		assert_eq!(sound.get_world_sound(34.0, 0.0, 0.0, 2, &PARAM, &mut out), 2);
+		assert_eq!(
+			sound.get_world_sound(34.0, 0.0, 0.0, 2, &PARAM, &mut out),
+			2
+		);
 		assert_eq!(out[0].paramid, SoundmgrID::FootstepsForward);
 		assert_eq!(out[1].paramid, SoundmgrID::FootstepsSide);
 
 		// And at 29 units the backward one joins them.
-		assert_eq!(sound.get_world_sound(29.0, 0.0, 0.0, 2, &PARAM, &mut out), 3);
+		assert_eq!(
+			sound.get_world_sound(29.0, 0.0, 0.0, 2, &PARAM, &mut out),
+			3
+		);
 		assert_eq!(out[1].paramid, SoundmgrID::FootstepsBack);
 	}
 

@@ -90,8 +90,16 @@ fn geometry_lands_where_the_transform_stack_puts_it() {
 	// is at NDC y = 0.8, which is row 6.4, and the base is at NDC y = -0.8, which is row
 	// 57.6. So the middle rows are covered and the outermost ones are not, and if the
 	// vertical mapping ever flips, the two end assertions swap over.
-	assert_eq!(pixel(&pixels, SIZE / 2, 20), [0, 255, 0, 255], "upper middle");
-	assert_eq!(pixel(&pixels, SIZE / 2, 45), [0, 255, 0, 255], "lower middle");
+	assert_eq!(
+		pixel(&pixels, SIZE / 2, 20),
+		[0, 255, 0, 255],
+		"upper middle"
+	);
+	assert_eq!(
+		pixel(&pixels, SIZE / 2, 45),
+		[0, 255, 0, 255],
+		"lower middle"
+	);
 	assert_eq!(pixel(&pixels, SIZE / 2, 3), CLEAR, "above the apex");
 	assert_eq!(pixel(&pixels, SIZE / 2, 62), CLEAR, "below the base");
 }
@@ -110,7 +118,11 @@ fn translating_the_projection_moves_the_geometry() {
 		gfx.draw(gl::GL_TRIANGLES, &triangle(0.0, GREEN));
 		gfx.pop_matrix();
 	});
-	assert_eq!(pixel(&pixels, SIZE / 2, SIZE / 2), CLEAR, "pushed clear of the centre");
+	assert_eq!(
+		pixel(&pixels, SIZE / 2, SIZE / 2),
+		CLEAR,
+		"pushed clear of the centre"
+	);
 	assert_eq!(
 		pixel(&pixels, 60, SIZE / 2),
 		[0, 255, 0, 255],
@@ -189,7 +201,10 @@ fn blending_mixes_with_what_is_already_there() {
 	});
 	// Half the red over the green: the green channel keeps half its value.
 	let centre = pixel(&pixels, SIZE / 2, SIZE / 2);
-	assert!(centre[0] >= 127 && centre[1] >= 127 && centre[2] == 0, "{centre:?}");
+	assert!(
+		centre[0] >= 127 && centre[1] >= 127 && centre[2] == 0,
+		"{centre:?}"
+	);
 }
 
 #[test]
@@ -213,6 +228,10 @@ fn culling_drops_the_winding_it_is_told_to() {
 		gfx.draw(gl::GL_TRIANGLES, &triangle(0.0, GREEN));
 	});
 
-	assert_eq!(pixel(&ccw, SIZE / 2, SIZE / 2), [0, 255, 0, 255], "front face kept");
+	assert_eq!(
+		pixel(&ccw, SIZE / 2, SIZE / 2),
+		[0, 255, 0, 255],
+		"front face kept"
+	);
 	assert_eq!(pixel(&cw, SIZE / 2, SIZE / 2), CLEAR, "back face culled");
 }

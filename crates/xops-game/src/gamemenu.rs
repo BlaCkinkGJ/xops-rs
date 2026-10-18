@@ -109,7 +109,10 @@ const OPTIONS_KEY_DATAS: usize = 18;
 
 /// `strlen` on a NUL terminated byte string.
 fn cstr(bytes: &[u8]) -> &[u8] {
-	&bytes[..bytes.iter().position(|&byte| byte == 0).unwrap_or(bytes.len())]
+	&bytes[..bytes
+		.iter()
+		.position(|&byte| byte == 0)
+		.unwrap_or(bytes.len())]
 }
 
 /// `strcpy` into one of the fixed buffers these screens hold. The upstream writes past
@@ -194,13 +197,7 @@ fn link_text_hit(
 
 /// The upstream inline test for one mission row: 20 pixels per character, rows 30 pixels
 /// apart starting 30 below the menu's top edge, and 26 pixels of text in each row.
-fn mission_row_hit(
-	name: &[u8],
-	row: i32,
-	mouse_x: i32,
-	mouse_y: i32,
-	config: &Config,
-) -> bool {
+fn mission_row_hit(name: &[u8], row: i32, mouse_x: i32, mouse_y: i32, config: &Config) -> bool {
 	let menu_x = mainmenu_x(config);
 	let menu_y = mainmenu_y(config);
 	menu_x < mouse_x
@@ -218,7 +215,15 @@ fn rect_hit(x1: i32, y1: i32, x2: i32, y2: i32, mouse_x: i32, mouse_y: i32) -> b
 /// The same test as the menu's own text uses it, with the scrollbar drag suppressing the
 /// highlight: a text that lights up under the cursor must not light up while the knob is
 /// being dragged past it.
-fn hovered(x1: i32, y1: i32, x2: i32, y2: i32, mouse_x: i32, mouse_y: i32, scrolling: bool) -> bool {
+fn hovered(
+	x1: i32,
+	y1: i32,
+	x2: i32,
+	y2: i32,
+	mouse_x: i32,
+	mouse_y: i32,
+	scrolling: bool,
+) -> bool {
 	!scrolling && rect_hit(x1, y1, x2, y2, mouse_x, mouse_y)
 }
 
@@ -247,7 +252,9 @@ fn mission_name<'m>(
 
 /// `strcpy(mifpath, ADDONDIR); strcat(mifpath, "\\"); strcat(mifpath, GetFileName(id))`.
 fn set_mifpath(game_info: &mut GameInfo, id: i32, addon: &AddonList) {
-	let name = addon.get_filename(id).map_or(b"".as_slice(), |name| cstr(name));
+	let name = addon
+		.get_filename(id)
+		.map_or(b"".as_slice(), |name| cstr(name));
 	let mut path = Vec::with_capacity(ADDONDIR.len() + 1 + name.len());
 	path.extend_from_slice(ADDONDIR);
 	path.push(b'\\');
@@ -402,7 +409,9 @@ impl<'a> Opening<'a> {
 
 		self.world.block_data.calculation_blockdata(false);
 		d3dg.load_mapdata(self.world.block_data.clone(), OPENING_DIR);
-		self.world.collision.init_collision(Some(&self.world.block_data));
+		self.world
+			.collision
+			.init_collision(Some(&self.world.block_data));
 
 		self.world.objects.load_point_data(
 			d3dg,
@@ -1194,8 +1203,7 @@ impl<'a> MainMenu<'a> {
 				menu_y + MAINMENU_H - 2,
 				mouse_x,
 				mouse_y,
-			)
-		{
+			) {
 			if self.world.game_info.selectmission_id >= 0 {
 				if self.world.addon.get_total_datas() > 0 {
 					self.world.game_info.selectmission_id = -1;
@@ -1217,8 +1225,7 @@ impl<'a> MainMenu<'a> {
 					option_y + 16,
 					mouse_x,
 					mouse_y,
-				)
-			{
+				) {
 				self.modescreen = 1;
 			}
 		}
@@ -1901,14 +1908,7 @@ impl<'a> MainMenu<'a> {
 				20,
 				26,
 			);
-			d3dg.draw_2d_texture_font_text(
-				menu_x,
-				menu_y + 30 + i * 30,
-				name,
-				color,
-				20,
-				26,
-			);
+			d3dg.draw_2d_texture_font_text(menu_x, menu_y + 30 + i * 30, name, color, 20, 26);
 		}
 
 		if ENABLE_MENUOPTIONS {
@@ -1944,14 +1944,7 @@ impl<'a> MainMenu<'a> {
 				12,
 				16,
 			);
-			d3dg.draw_2d_texture_font_text(
-				option_x,
-				option_y,
-				b"< OPTIONS >",
-				color,
-				12,
-				16,
-			);
+			d3dg.draw_2d_texture_font_text(option_x, option_y, b"< OPTIONS >", color, 12, 16);
 		}
 	}
 
@@ -2275,7 +2268,8 @@ impl<'a> MainMenu<'a> {
 		}
 
 		for i in 0..OPTIONS_KEY_DATAS {
-			self.options_p2_link_text_data[14 + i] = link_text(170, i as i32 * 20, 12, 16, blue, red, b"[ ]");
+			self.options_p2_link_text_data[14 + i] =
+				link_text(170, i as i32 * 20, 12, 16, blue, red, b"[ ]");
 		}
 
 		// Page 3: the way back to page 1.
@@ -2460,11 +2454,20 @@ mod tests {
 	/// The `.mif` files are the smallest ones the reader accepts, and what matters here is
 	/// only that they are found and sorted, which is the same fixture `datafile.rs` uses.
 	fn addon_dir(name: &str) -> std::path::PathBuf {
-		let dir = std::env::temp_dir().join(format!("xops_gamemenu_{}_{}", std::process::id(), name));
+		let dir =
+			std::env::temp_dir().join(format!("xops_gamemenu_{}_{}", std::process::id(), name));
 		let _ = std::fs::remove_dir_all(&dir);
 		std::fs::create_dir_all(&dir).expect("create temp dir");
-		xops_platform::fs::write_file(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
-		xops_platform::fs::write_file(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(
+			dir.join("b.mif"),
+			b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n",
+		)
+		.unwrap();
+		xops_platform::fs::write_file(
+			dir.join("a.MIF"),
+			b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n",
+		)
+		.unwrap();
 		dir
 	}
 
@@ -2766,7 +2769,10 @@ mod tests {
 		assert_eq!(menu.options_p1_link_text_data[0].text_w, 20);
 		assert_eq!(menu.options_p1_link_text_data[0].text_h, 26);
 
-		assert_eq!(cstr(&menu.options_p2_link_text_data[0].text), b"< DEFAULT >");
+		assert_eq!(
+			cstr(&menu.options_p2_link_text_data[0].text),
+			b"< DEFAULT >"
+		);
 		assert_eq!(cstr(&menu.options_p2_link_text_data[3].text), b"[<<]");
 		assert_eq!(
 			cstr(&menu.options_p2_link_text_data[13].text),

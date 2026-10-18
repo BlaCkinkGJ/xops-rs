@@ -301,7 +301,12 @@ impl D2Dscene {
 
 	/// The upstream `D2Dscene::Destroy`: the title image goes back to the renderer and the
 	/// state machine moves on.
-	pub fn destroy(&mut self, d3dg: &mut D3DGraphics, state: &mut StateMachine, log: &mut DebugLog) {
+	pub fn destroy(
+		&mut self,
+		d3dg: &mut D3DGraphics,
+		state: &mut StateMachine,
+		log: &mut DebugLog,
+	) {
 		d3dg.cleanup_texture(self.gametitle);
 		state.next_state(log);
 	}

@@ -395,7 +395,13 @@ impl Bullet {
 			self.object.model_size,
 		);
 		// A bullet is never darkened.
-		d3dg.render_model(self.object.id_model, self.object.id_texture, false, false, nomodel);
+		d3dg.render_model(
+			self.object.id_model,
+			self.object.id_texture,
+			false,
+			false,
+			nomodel,
+		);
 	}
 }
 
@@ -498,9 +504,9 @@ impl Grenade {
 			return 0;
 		}
 
-		let max_dist = (self.move_x * self.move_x + self.move_y * self.move_y
-			+ self.move_z * self.move_z)
-			.sqrt();
+		let max_dist =
+			(self.move_x * self.move_x + self.move_y * self.move_y + self.move_z * self.move_z)
+				.sqrt();
 
 		if let Some((id, face, _)) = coll.check_all_block_intersect_ray(
 			block_data_if,
@@ -513,10 +519,24 @@ impl Grenade {
 			max_dist,
 		) {
 			let angle = coll
-				.angle_vector(block_data_if, id, face, self.move_x, self.move_y, self.move_z)
+				.angle_vector(
+					block_data_if,
+					id,
+					face,
+					self.move_x,
+					self.move_y,
+					self.move_z,
+				)
 				.unwrap_or(0.0);
 			let (vx, vy, vz) = coll
-				.reflect_vector(block_data_if, id, face, self.move_x, self.move_y, self.move_z)
+				.reflect_vector(
+					block_data_if,
+					id,
+					face,
+					self.move_x,
+					self.move_y,
+					self.move_z,
+				)
 				.unwrap_or((self.move_x, self.move_y, self.move_z));
 
 			// Hitting a face head on loses the most speed, a glancing hit almost none.
@@ -1009,7 +1029,18 @@ mod tests {
 	#[test]
 	fn the_type_bits_select_collision_and_billboarding() {
 		let mut effect = Effect::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 1.0, 0.0, 1, 5);
-		effect.set_param_data(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 5, effect_type::NORMAL);
+		effect.set_param_data(
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+			0.0,
+			5,
+			effect_type::NORMAL,
+		);
 		assert!(!effect.collide_map_flag());
 
 		effect.set_param_data(
@@ -1046,7 +1077,18 @@ mod tests {
 	#[test]
 	fn the_effect_ramps_position_scale_and_texture_rotation() {
 		let mut effect = Effect::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 1.0, 0.0, 1, 10);
-		effect.set_param_data(2.0, 1.0, -1.0, -0.25, 0.5, 0.1, 2.0, 0.5, 10, effect_type::NORMAL);
+		effect.set_param_data(
+			2.0,
+			1.0,
+			-1.0,
+			-0.25,
+			0.5,
+			0.1,
+			2.0,
+			0.5,
+			10,
+			effect_type::NORMAL,
+		);
 
 		assert_eq!(effect.process_object(), 1);
 		assert_eq!(effect.object.pos_data(), (2.0, 1.0, -1.0, 0.1));

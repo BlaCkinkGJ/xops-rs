@@ -175,7 +175,7 @@ impl Game {
 
 	/// Renders the frame that has been recorded and hands the pixels back, for the
 	/// offscreen mode. The windowed mode presents it instead.
-		fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
+	fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
 		self.d3dg.gfx_ref().read_frame()
 	}
 }
@@ -263,7 +263,8 @@ impl Shell {
 			self.config.set_default_config();
 			self.config.save_file(CONFIG_FILE, &mut self.log);
 		}
-		self.config.create_ext_config(EXT_CONFIG_FILE, &mut self.log);
+		self.config
+			.create_ext_config(EXT_CONFIG_FILE, &mut self.log);
 		self.config.load_ext_file(EXT_CONFIG_FILE, &mut self.log);
 
 		if self.sound_ctrl.init_sound() != 0 {
@@ -549,8 +550,7 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 	// agree before the first frame. They are the same number in the windowed path because
 	// the configuration takes the window's size there.
 	let (width, height) = game.d3dg.gfx_ref().size();
-	game.config
-		.set_screen_size(width as i32, height as i32);
+	game.config.set_screen_size(width as i32, height as i32);
 
 	let mut input = Input::default();
 	let mut rendered = Vec::with_capacity(frames as usize);

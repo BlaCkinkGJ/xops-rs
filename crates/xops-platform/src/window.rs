@@ -181,8 +181,7 @@ impl<A: App> ApplicationHandler for Host<A> {
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
 			WindowEvent::Resized(size) => {
-				self.app
-					.resized(size.width.max(1), size.height.max(1));
+				self.app.resized(size.width.max(1), size.height.max(1));
 			}
 			_ => {}
 		}
@@ -196,7 +195,9 @@ impl<A: App> ApplicationHandler for Host<A> {
 
 		// What the host gained or lost between the last burst and this one. A value near
 		// the frame step is the loop working, and a second is the loop asleep.
-		let idle = self.last_burst_end.map(|end| end.elapsed().as_secs_f64() * 1000.0);
+		let idle = self
+			.last_burst_end
+			.map(|end| end.elapsed().as_secs_f64() * 1000.0);
 		if let Some(idle) = idle {
 			trace::wait(idle);
 		}
@@ -335,11 +336,7 @@ impl<A: App> ApplicationHandler for Host<A> {
 /// Nothing is done when the display is large enough, which is the usual case. On a screen
 /// smaller than the request the window is scaled down to leave room for the desktop around
 /// it, because a window the size of the screen has no title bar to move it by.
-fn fit_to_display(
-	event_loop: &ActiveEventLoop,
-	width: u32,
-	height: u32,
-) -> (u32, u32) {
+fn fit_to_display(event_loop: &ActiveEventLoop, width: u32, height: u32) -> (u32, u32) {
 	let Some(monitor) = event_loop.primary_monitor() else {
 		return (width, height);
 	};

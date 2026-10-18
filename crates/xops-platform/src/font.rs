@@ -417,8 +417,15 @@ mod tests {
 			alphas.insert(pixel[3]);
 		}
 
-		assert!(alphas.len() > 1, "coverage is flat, so nothing was antialiased");
-		assert_eq!(alphas.iter().next(), Some(&0), "no blank pixel in the bitmap");
+		assert!(
+			alphas.len() > 1,
+			"coverage is flat, so nothing was antialiased"
+		);
+		assert_eq!(
+			alphas.iter().next(),
+			Some(&0),
+			"no blank pixel in the bitmap"
+		);
 		assert!(
 			*alphas.iter().next_back().unwrap() > 0,
 			"no covered pixel in the bitmap"

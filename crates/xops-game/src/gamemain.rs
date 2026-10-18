@@ -6,11 +6,11 @@
 //! screen because the header declares them once and every screen reads them.
 
 use crate::collision::Collision;
-use crate::d3dgraphics::D3DGraphics;
-use crate::input::InputControl;
 use crate::config::Config;
 use crate::core::degree_to_radian;
+use crate::d3dgraphics::D3DGraphics;
 use crate::datafile::{AddonList, BlockDataInterface, MIFInterface, PointDataInterface};
+use crate::input::InputControl;
 use crate::parameter::ParameterInfo;
 use crate::resource::ResourceManager;
 use crate::sound::SoundControl;
@@ -361,8 +361,7 @@ impl Default for GameInfo {
 }
 
 /// `MenuLinkTextData`: one selectable line on an options page.
-#[derive(Copy, Clone, Debug)]
-#[derive(Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct MenuLinkTextData {
 	pub enable: bool,
 	pub pos_x: i32,
@@ -373,7 +372,6 @@ pub struct MenuLinkTextData {
 	pub text_cursorcolor: u32,
 	pub text: [u8; 32],
 }
-
 
 /// `ConsoleData`: one line of the debug console.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

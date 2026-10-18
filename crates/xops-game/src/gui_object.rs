@@ -116,7 +116,8 @@ impl ScrollbarObject {
 			// rather than through it. The upstream is the same expression, and its `(int)`
 			// cast of a NaN is undefined rather than zero, which is the one place this port
 			// is allowed to differ.
-			self.knob_scale = (h as f32 - self.knob_height) / (self.totalitems - self.showtems) as f32;
+			self.knob_scale =
+				(h as f32 - self.knob_height) / (self.totalitems - self.showtems) as f32;
 		}
 
 		self.knob_y = round(self.knob_scale * self.scrollitem as f32) as i32;

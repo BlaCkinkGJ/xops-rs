@@ -187,9 +187,7 @@ impl EventControl {
 		let (count, found) = point.search_pointdata(0x08, 0, 0, 0, target_p4, 0);
 		if count > 0 {
 			if let Some(mut pathdata) = found.and_then(|data| point.getdata(data.id)) {
-				if pathdata.p1 == POINT_P1TYPE_AIPATH
-					|| pathdata.p1 == POINT_P1TYPE_RAND_AIPATH
-				{
+				if pathdata.p1 == POINT_P1TYPE_AIPATH || pathdata.p1 == POINT_P1TYPE_RAND_AIPATH {
 					// The upstream writes p1 to p4 back, so p3 and p4 are rewritten with
 					// the values they already carry. Only p2 moves.
 					pathdata.p2 = newmode as i16;
@@ -780,10 +778,7 @@ mod tests {
 		// A point that is not a path is left alone as well.
 		let mut points = load_points(
 			"event_walknotpath.pd1",
-			&[
-				(0.0, 0.0, 0.0, 5, 1, 0, 7),
-				(0.0, 0.0, 0.0, 14, 7, 99, 10),
-			],
+			&[(0.0, 0.0, 0.0, 5, 1, 0, 7), (0.0, 0.0, 0.0, 14, 7, 99, 10)],
 		);
 		event.reset(10);
 		assert_eq!(
@@ -894,8 +889,18 @@ mod tests {
 			1,
 			true
 		));
-		assert!(!EventControl::check_have_weapon(&mut objects, ID_WEAPON_CASE, 1, false));
-		assert!(!EventControl::check_have_weapon(&mut objects, ID_WEAPON_CASE, 1, true));
+		assert!(!EventControl::check_have_weapon(
+			&mut objects,
+			ID_WEAPON_CASE,
+			1,
+			false
+		));
+		assert!(!EventControl::check_have_weapon(
+			&mut objects,
+			ID_WEAPON_CASE,
+			1,
+			true
+		));
 		assert!(!EventControl::set_team_id(&mut objects, 1, 0));
 	}
 
@@ -904,8 +909,16 @@ mod tests {
 	#[test]
 	fn a_missing_small_object_counts_as_destroyed() {
 		let mut objects = empty_objects();
-		assert!(EventControl::check_break_small_object(&mut objects, 5, false));
-		assert!(!EventControl::check_break_small_object(&mut objects, 5, true));
+		assert!(EventControl::check_break_small_object(
+			&mut objects,
+			5,
+			false
+		));
+		assert!(!EventControl::check_break_small_object(
+			&mut objects,
+			5,
+			true
+		));
 	}
 
 	/// Nothing is rewritten when the target is not an AI path, and the answer says so.

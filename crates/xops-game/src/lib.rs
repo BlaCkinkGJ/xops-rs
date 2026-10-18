@@ -7,31 +7,31 @@
 pub mod collision;
 pub mod config;
 pub mod core;
-pub mod datafile;
 pub mod d3dgraphics;
+pub mod datafile;
 pub mod debug;
+pub mod effects;
+pub mod event;
 pub mod gamemain;
 pub mod gamemenu;
 pub mod gui_object;
 pub mod human;
-pub mod motion;
 pub mod input;
 pub mod maingame;
 pub mod map;
 pub mod model;
+pub mod motion;
 pub mod object;
 pub mod objectmanager;
-pub mod effects;
-pub mod event;
-pub mod weapon;
 pub mod parameter;
 pub mod statemachine;
 pub mod twod;
+pub mod weapon;
 pub mod window;
 
 pub mod resource;
-pub mod scheduler;
 pub mod scene;
+pub mod scheduler;
 pub mod sound;
 pub mod soundmanager;
 

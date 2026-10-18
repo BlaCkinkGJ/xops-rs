@@ -1582,46 +1582,44 @@ pub const WEAPON_PARAMETER: [WeaponParameter; TOTAL_PARAMETERINFO_WEAPON] = [
 ];
 
 /// Upstream `BugWeapon`. 1 entries.
-pub const BUG_WEAPON_PARAMETER: [WeaponParameter; 1] = [
-	WeaponParameter {
-		// data for the special bug weapons
-		name: b"BugWeapon",
-		model: b"",
-		texture: b"",
-		attacks: 0,
-		penetration: 0,
-		blazings: 0,
-		speed: 0,
-		nbsmax: 0,
-		reloads: 0,
-		reaction: 0,
-		error_range_min: 0,
-		error_range_max: 0,
-		mx: 0.0,
-		my: 0.0,
-		mz: 0.0,
-		flashx: 0.0,
-		flashy: 0.0,
-		flashz: 0.0,
-		yakkyou_px: 0.0,
-		yakkyou_py: 0.0,
-		yakkyou_pz: 0.0,
-		yakkyou_sx: 0.0,
-		yakkyou_sy: 0.0,
-		yakkyou_size: -1.0,
-		yakkyou_delay: 0,
-		burstcnt: 0,
-		scopemode: 0,
-		size: 9.0,
-		soundid: 0,
-		soundvolume: 0,
-		silencer: false,
-		weapon_p: 1,
-		change_weapon_id: -1,
-		change_weapon_cnt: 0,
-		pellet: 0,
-	},
-];
+pub const BUG_WEAPON_PARAMETER: [WeaponParameter; 1] = [WeaponParameter {
+	// data for the special bug weapons
+	name: b"BugWeapon",
+	model: b"",
+	texture: b"",
+	attacks: 0,
+	penetration: 0,
+	blazings: 0,
+	speed: 0,
+	nbsmax: 0,
+	reloads: 0,
+	reaction: 0,
+	error_range_min: 0,
+	error_range_max: 0,
+	mx: 0.0,
+	my: 0.0,
+	mz: 0.0,
+	flashx: 0.0,
+	flashy: 0.0,
+	flashz: 0.0,
+	yakkyou_px: 0.0,
+	yakkyou_py: 0.0,
+	yakkyou_pz: 0.0,
+	yakkyou_sx: 0.0,
+	yakkyou_sy: 0.0,
+	yakkyou_size: -1.0,
+	yakkyou_delay: 0,
+	burstcnt: 0,
+	scopemode: 0,
+	size: 9.0,
+	soundid: 0,
+	soundvolume: 0,
+	silencer: false,
+	weapon_p: 1,
+	change_weapon_id: -1,
+	change_weapon_cnt: 0,
+	pellet: 0,
+}];
 
 /// Upstream `SmallObject`. 12 entries.
 pub const SMALL_OBJECT_PARAMETER: [SmallObjectParameter; TOTAL_PARAMETERINFO_SMALLOBJECT] = [
@@ -2435,7 +2433,10 @@ mod tests {
 		assert_eq!(HUMAN_TEXTURE_PATH.len(), TOTAL_HUMANTEXTURE);
 		assert_eq!(WEAPON_PARAMETER.len(), TOTAL_PARAMETERINFO_WEAPON);
 		assert_eq!(BUG_WEAPON_PARAMETER.len(), 1);
-		assert_eq!(SMALL_OBJECT_PARAMETER.len(), TOTAL_PARAMETERINFO_SMALLOBJECT);
+		assert_eq!(
+			SMALL_OBJECT_PARAMETER.len(),
+			TOTAL_PARAMETERINFO_SMALLOBJECT
+		);
 		assert_eq!(BULLET_PARAMETER.len(), TOTAL_PARAMETERINFO_BULLET);
 		assert_eq!(OFFICIAL_MISSION_PARAMETER.len(), TOTAL_OFFICIALMISSION);
 		assert_eq!(AI_PARAMETER.len(), TOTAL_PARAMETERINFO_AILEVEL);
@@ -2444,9 +2445,18 @@ mod tests {
 
 	#[test]
 	fn the_id_constants_name_the_entries_upstream_says_they_do() {
-		assert_eq!(WEAPON_PARAMETER[ID_WEAPON_NONE as usize].name, b"NONE".as_slice());
-		assert_eq!(WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].name, b"GRENADE".as_slice());
-		assert_eq!(WEAPON_PARAMETER[ID_WEAPON_CASE as usize].name, b"CASE".as_slice());
+		assert_eq!(
+			WEAPON_PARAMETER[ID_WEAPON_NONE as usize].name,
+			b"NONE".as_slice()
+		);
+		assert_eq!(
+			WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].name,
+			b"GRENADE".as_slice()
+		);
+		assert_eq!(
+			WEAPON_PARAMETER[ID_WEAPON_CASE as usize].name,
+			b"CASE".as_slice()
+		);
 		assert_eq!(OFFICIALMISSION_BD1, b"temp.bd1".as_slice());
 		assert_eq!(SMALLOBJECT_SCALE, 5.0);
 	}
@@ -2500,16 +2510,31 @@ mod tests {
 		// small objects
 		assert_eq!(SMALL_OBJECT_PARAMETER[0].decide, 10);
 		assert_eq!(SMALL_OBJECT_PARAMETER[0].hp, 6);
-		assert_eq!(SMALL_OBJECT_PARAMETER[7].model, b"./data/article/isu.x".as_slice());
+		assert_eq!(
+			SMALL_OBJECT_PARAMETER[7].model,
+			b"./data/article/isu.x".as_slice()
+		);
 		assert_eq!(SMALL_OBJECT_PARAMETER[7].decide, 56);
 		assert_eq!(SMALL_OBJECT_PARAMETER[11].jump, 7);
 
 		// bullet 1 is the weapon 13 model, texture and size
-		assert_eq!(BULLET_PARAMETER[0].model, b"./data/model/bullet.x".as_slice());
+		assert_eq!(
+			BULLET_PARAMETER[0].model,
+			b"./data/model/bullet.x".as_slice()
+		);
 		assert_eq!(BULLET_PARAMETER[0].size, 1.0);
-		assert_eq!(BULLET_PARAMETER[1].model, WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].model);
-		assert_eq!(BULLET_PARAMETER[1].texture, WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].texture);
-		assert_eq!(BULLET_PARAMETER[1].size, WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].size);
+		assert_eq!(
+			BULLET_PARAMETER[1].model,
+			WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].model
+		);
+		assert_eq!(
+			BULLET_PARAMETER[1].texture,
+			WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].texture
+		);
+		assert_eq!(
+			BULLET_PARAMETER[1].size,
+			WEAPON_PARAMETER[ID_WEAPON_GRENADE as usize].size
+		);
 
 		// missions, including the directory separators that stay backslashes
 		let training = &OFFICIAL_MISSION_PARAMETER[0];
@@ -2522,7 +2547,10 @@ mod tests {
 		assert!(OFFICIAL_MISSION_PARAMETER[33].screen);
 		assert!(OFFICIAL_MISSION_PARAMETER[43].screen);
 		assert!(OFFICIAL_MISSION_PARAMETER[55].collision);
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[55].name, b"SCHOOL_EXT".as_slice());
+		assert_eq!(
+			OFFICIAL_MISSION_PARAMETER[55].name,
+			b"SCHOOL_EXT".as_slice()
+		);
 		assert!(OFFICIAL_MISSION_PARAMETER[56].collision);
 		assert_eq!(OFFICIAL_MISSION_PARAMETER[57].name, b"SCHOOL_DE".as_slice());
 		assert_eq!(OFFICIAL_MISSION_PARAMETER[57].txt, b"de".as_slice());
@@ -2531,15 +2559,30 @@ mod tests {
 		// AI levels: attack falls as the level rises, level 0 is the odd one at 99
 		assert_eq!(
 			AI_PARAMETER[0],
-			AIParameter { aiming: 1, attack: 99, search: 1, limitserror: 0 }
+			AIParameter {
+				aiming: 1,
+				attack: 99,
+				search: 1,
+				limitserror: 0
+			}
 		);
 		assert_eq!(
 			AI_PARAMETER[3],
-			AIParameter { aiming: 3, attack: 14, search: 4, limitserror: -1 }
+			AIParameter {
+				aiming: 3,
+				attack: 14,
+				search: 4,
+				limitserror: -1
+			}
 		);
 		assert_eq!(
 			AI_PARAMETER[5],
-			AIParameter { aiming: 5, attack: 10, search: 6, limitserror: -3 }
+			AIParameter {
+				aiming: 5,
+				attack: 10,
+				search: 6,
+				limitserror: -3
+			}
 		);
 
 		// scopes: the angles go through DegreeToRadian, scope 3 is a copy of scope 0
@@ -2551,11 +2594,17 @@ mod tests {
 		assert_eq!(SCOPE_PARAMETER[1].mouse_range, 0.0032);
 		assert!(SCOPE_PARAMETER[1].weapon_recoil_scope_only);
 		assert_eq!(SCOPE_PARAMETER[1].weapon_recoil_scope_ry_max, 2.0);
-		assert_eq!(SCOPE_PARAMETER[1].ai_add_search_enemy_max_dist_caution, 40.0);
+		assert_eq!(
+			SCOPE_PARAMETER[1].ai_add_search_enemy_max_dist_caution,
+			40.0
+		);
 		assert_eq!(SCOPE_PARAMETER[2].view_angle, degree_to_radian(15.0));
 		assert_eq!(SCOPE_PARAMETER[2].scope_gunsight, 2);
 		assert!(!SCOPE_PARAMETER[2].no_scope_gunsight);
-		assert_eq!(SCOPE_PARAMETER[2].weapon_motion_reaction_y, degree_to_radian(4.0));
+		assert_eq!(
+			SCOPE_PARAMETER[2].weapon_motion_reaction_y,
+			degree_to_radian(4.0)
+		);
 		assert_eq!(SCOPE_PARAMETER[3], SCOPE_PARAMETER[0]);
 	}
 
@@ -2572,14 +2621,22 @@ mod tests {
 		assert!(p.get_scope_param(-1).is_none());
 		// one past the end
 		assert!(p.get_human(TOTAL_PARAMETERINFO_HUMAN as i32).is_none());
-		assert!(p.get_human_texture_path(TOTAL_HUMANTEXTURE as i32).is_none());
-		assert!(p.get_small_object(TOTAL_PARAMETERINFO_SMALLOBJECT as i32).is_none());
+		assert!(p
+			.get_human_texture_path(TOTAL_HUMANTEXTURE as i32)
+			.is_none());
+		assert!(p
+			.get_small_object(TOTAL_PARAMETERINFO_SMALLOBJECT as i32)
+			.is_none());
 		assert!(p.get_bullet(TOTAL_PARAMETERINFO_BULLET as i32).is_none());
-		assert!(p.get_official_mission(TOTAL_OFFICIALMISSION as i32).is_none());
+		assert!(p
+			.get_official_mission(TOTAL_OFFICIALMISSION as i32)
+			.is_none());
 		assert!(p.get_ai_level(TOTAL_PARAMETERINFO_AILEVEL as i32).is_none());
 		// the last valid id still works
 		assert!(p.get_human(TOTAL_PARAMETERINFO_HUMAN as i32 - 1).is_some());
-		assert!(p.get_ai_level(TOTAL_PARAMETERINFO_AILEVEL as i32 - 1).is_some());
+		assert!(p
+			.get_ai_level(TOTAL_PARAMETERINFO_AILEVEL as i32 - 1)
+			.is_some());
 	}
 
 	#[test]
@@ -2597,7 +2654,9 @@ mod tests {
 		// the bug weapon answers, 25 is in neither table
 		assert_eq!(p.get_weapon(22).unwrap().name, b"MK23 SD".as_slice());
 		assert_eq!(
-			p.get_weapon(TOTAL_PARAMETERINFO_WEAPON as i32).unwrap().name,
+			p.get_weapon(TOTAL_PARAMETERINFO_WEAPON as i32)
+				.unwrap()
+				.name,
 			b"BugWeapon".as_slice()
 		);
 		assert!(p.get_weapon(25).is_none());
@@ -2609,7 +2668,10 @@ mod tests {
 	#[test]
 	fn a_scope_id_at_or_above_the_table_clamps_to_the_last_entry() {
 		let p = ParameterInfo::new();
-		assert_eq!(p.get_scope_param(TOTAL_PARAMETERINFO_SCOPE as i32), p.get_scope_param(3));
+		assert_eq!(
+			p.get_scope_param(TOTAL_PARAMETERINFO_SCOPE as i32),
+			p.get_scope_param(3)
+		);
 		assert_eq!(p.get_scope_param(999), p.get_scope_param(3));
 		assert_eq!(p.get_scope_param(3), p.get_scope_param(0));
 		// the clamp is not a failure

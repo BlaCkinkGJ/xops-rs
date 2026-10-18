@@ -19,8 +19,10 @@ use xops_platform::gfx::Vertex;
 use xops_platform::gl::{self, Rgba};
 use xops_platform::texture;
 
-use crate::datafile::{blockdataface, path_from_bytes, BlockDataInterface, Blockdata, TOTAL_BLOCKTEXTURE};
 use crate::d3dgraphics::{D3DGraphics, MAX_TEXTURE};
+use crate::datafile::{
+	blockdataface, path_from_bytes, BlockDataInterface, Blockdata, TOTAL_BLOCKTEXTURE,
+};
 
 /// The slot the untextured draws bind. It names no texture, so the renderer resolves it
 /// to its 1x1 white texture. `twod` uses the same sentinel for the 2D primitives.
@@ -110,13 +112,19 @@ impl D3DGraphics {
 	/// `ptextures[MAX_TEXTURE]` table and scans it for a free `useflag`, and the renderer's
 	/// table answers the same question with a slot that has no texture in it. The two
 	/// agree on the range, so a game texture id is a slot id.
-	pub fn load_texture(&mut self, filename: &[u8], texturefont: bool, black_transparent: bool) -> i32 {
+	pub fn load_texture(
+		&mut self,
+		filename: &[u8],
+		texturefont: bool,
+		black_transparent: bool,
+	) -> i32 {
 		// Upstream ignores this one. The DirectX backend does too, and the texture font
 		// path that would have used it is in `twod`.
 		let _ = texturefont;
 
 		// Find a free data number. Upstream refuses to go to the disk without one.
-		let Some(id) = (0..MAX_TEXTURE).find(|&slot| self.gfx_ref().texture_size(slot).is_none()) else {
+		let Some(id) = (0..MAX_TEXTURE).find(|&slot| self.gfx_ref().texture_size(slot).is_none())
+		else {
 			return -1;
 		};
 
@@ -267,7 +275,9 @@ impl D3DGraphics {
 				// the four uprights.
 				for k in 0..4 {
 					let j = (k + 1) % 4;
-					self.render_line(data.x[k], data.y[k], data.z[k], data.x[j], data.y[j], data.z[j], linecolor);
+					self.render_line(
+						data.x[k], data.y[k], data.z[k], data.x[j], data.y[j], data.z[j], linecolor,
+					);
 					self.render_line(
 						data.x[k + 4],
 						data.y[k + 4],
@@ -277,7 +287,15 @@ impl D3DGraphics {
 						data.z[j + 4],
 						linecolor,
 					);
-					self.render_line(data.x[k], data.y[k], data.z[k], data.x[k + 4], data.y[k + 4], data.z[k + 4], linecolor);
+					self.render_line(
+						data.x[k],
+						data.y[k],
+						data.z[k],
+						data.x[k + 4],
+						data.y[k + 4],
+						data.z[k + 4],
+						linecolor,
+					);
 				}
 			}
 			return;
@@ -377,7 +395,14 @@ impl D3DGraphics {
 	/// against the lit 1.0. `nomodel` draws the three axes instead, which is how the game
 	/// shows a model's orientation without the model. `hudmode` is unused upstream in both
 	/// backends, and it stays in the signature to keep the call sites readable against it.
-	pub fn render_model(&mut self, id_model: i32, id_texture: i32, darkflag: bool, hudmode: bool, nomodel: bool) {
+	pub fn render_model(
+		&mut self,
+		id_model: i32,
+		id_texture: i32,
+		darkflag: bool,
+		hudmode: bool,
+		nomodel: bool,
+	) {
 		let _ = hudmode;
 
 		if id_model == -1 {
@@ -506,20 +531,59 @@ impl D3DGraphics {
 		}
 
 		let alpha = 0.02 * brightness as f32;
-		self.draw_2d_box(0, 0, width, height, Self::get_color_code(1.0, 1.0, 1.0, alpha));
+		self.draw_2d_box(
+			0,
+			0,
+			width,
+			height,
+			Self::get_color_code(1.0, 1.0, 1.0, alpha),
+		);
 	}
 
 	/// `RenderCenterline` (line 2598), the debug axes at the world origin, drawn from
 	/// wherever the camera is.
 	pub fn render_centerline(&mut self) {
 		self.reset_world_transform();
-		self.render_line(100.0, 0.0, 0.0, -100.0, 0.0, 0.0, Self::get_color_code(1.0, 0.0, 0.0, 1.0));
-		self.render_line(0.0, 100.0, 0.0, 0.0, -100.0, 0.0, Self::get_color_code(0.0, 1.0, 0.0, 1.0));
-		self.render_line(0.0, 0.0, 100.0, 0.0, 0.0, -100.0, Self::get_color_code(0.0, 0.0, 1.0, 1.0));
+		self.render_line(
+			100.0,
+			0.0,
+			0.0,
+			-100.0,
+			0.0,
+			0.0,
+			Self::get_color_code(1.0, 0.0, 0.0, 1.0),
+		);
+		self.render_line(
+			0.0,
+			100.0,
+			0.0,
+			0.0,
+			-100.0,
+			0.0,
+			Self::get_color_code(0.0, 1.0, 0.0, 1.0),
+		);
+		self.render_line(
+			0.0,
+			0.0,
+			100.0,
+			0.0,
+			0.0,
+			-100.0,
+			Self::get_color_code(0.0, 0.0, 1.0, 1.0),
+		);
 	}
 
 	/// `Renderline` (line 2607), a two point line in the current world transform.
-	pub fn render_line(&mut self, x1: f32, y1: f32, z1: f32, x2: f32, y2: f32, z2: f32, color: u32) {
+	pub fn render_line(
+		&mut self,
+		x1: f32,
+		y1: f32,
+		z1: f32,
+		x2: f32,
+		y2: f32,
+		z2: f32,
+		color: u32,
+	) {
 		let colour = Rgba(color).to_floats();
 		let vertices = [
 			Vertex {
@@ -562,10 +626,11 @@ mod tests {
 	const MODEL_FILE: &str = "../../data/model/arm00.x";
 
 	fn headless() -> D3DGraphics {
-		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
-			backends: xops_platform::wgpu::Backends::all(),
-			..Default::default()
-		});
+		let instance =
+			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+				backends: xops_platform::wgpu::Backends::all(),
+				..Default::default()
+			});
 		let gfx = Gfx::new(&instance, None, SIZE, SIZE, None).expect("a headless renderer");
 		D3DGraphics::new(gfx, false, 0)
 	}
@@ -619,7 +684,10 @@ mod tests {
 	fn render(graphics: &mut D3DGraphics, body: impl FnOnce(&mut D3DGraphics)) -> Vec<u8> {
 		assert_eq!(graphics.start_render(), 0);
 		body(graphics);
-		assert!(!graphics.end_render(), "end_render reports failure, not success");
+		assert!(
+			!graphics.end_render(),
+			"end_render reports failure, not success"
+		);
 		let (_, _, pixels) = graphics.gfx_ref().read_frame().expect("read the frame");
 		pixels
 	}
@@ -658,11 +726,12 @@ mod tests {
 	/// known place without a camera in the way. The projection is the identity until a
 	/// camera is set, so the vertex z is the depth.
 	fn ndc_quad(graphics: &mut D3DGraphics, z: f32, colour: [f32; 4]) {
-		let vertices: [Vertex; 4] = [(-0.8, -0.8), (0.8, -0.8), (-0.8, 0.8), (0.8, 0.8)].map(|(x, y)| Vertex {
-			position: [x, y, z],
-			uv: [0.0, 0.0],
-			colour,
-		});
+		let vertices: [Vertex; 4] =
+			[(-0.8, -0.8), (0.8, -0.8), (-0.8, 0.8), (0.8, 0.8)].map(|(x, y)| Vertex {
+				position: [x, y, z],
+				uv: [0.0, 0.0],
+				colour,
+			});
 		let gfx = graphics.gfx();
 		gfx.bind_texture(UNTEXTURED);
 		gfx.draw(gl::GL_TRIANGLE_STRIP, &vertices);
@@ -678,7 +747,9 @@ mod tests {
 
 		let id = graphics.load_texture(BMP_TEXTURE, false, false);
 		assert!(id >= 0, "a real .bmp loads");
-		let (width, height) = graphics.get_texture_size(id).expect("a loaded texture has a size");
+		let (width, height) = graphics
+			.get_texture_size(id)
+			.expect("a loaded texture has a size");
 		assert!(width > 0 && height > 0, "{width}x{height}");
 		assert_eq!(graphics.get_total_textures(), 1);
 
@@ -705,10 +776,17 @@ mod tests {
 		let mut graphics = headless();
 
 		// No such file: the extension says jpeg, so only the failed read can refuse it.
-		assert_eq!(graphics.load_texture(b"../../data/map0/nope.jpg", false, false), -1);
+		assert_eq!(
+			graphics.load_texture(b"../../data/map0/nope.jpg", false, false),
+			-1
+		);
 		// A file whose extension means nothing to the game, whatever its bytes are.
 		assert_eq!(graphics.load_texture(MAP_FILE, false, false), -1);
-		assert_eq!(graphics.get_total_textures(), 0, "a failed load takes no slot");
+		assert_eq!(
+			graphics.get_total_textures(),
+			0,
+			"a failed load takes no slot"
+		);
 	}
 
 	#[test]
@@ -723,14 +801,22 @@ mod tests {
 			.count();
 		assert_eq!(loaded, 6);
 		assert_eq!(graphics.get_total_textures(), 6);
-		assert_eq!(graphics.get_map_texture_id(6), -1, "an empty slot stays empty");
+		assert_eq!(
+			graphics.get_map_texture_id(6),
+			-1,
+			"an empty slot stays empty"
+		);
 		assert_eq!(graphics.get_map_texture_id(-1), -1);
 		assert_eq!(graphics.get_map_texture_id(TOTAL_BLOCKTEXTURE as i32), -1);
 
 		graphics.cleanup_mapdata();
 		assert_eq!(graphics.bs(), 0);
 		assert!(graphics.block_data().is_none());
-		assert_eq!(graphics.get_total_textures(), 0, "the map's textures go with it");
+		assert_eq!(
+			graphics.get_total_textures(),
+			0,
+			"the map's textures go with it"
+		);
 	}
 
 	#[test]
@@ -766,7 +852,11 @@ mod tests {
 		camera_facing_the_map(&mut graphics, true);
 
 		let pixels = render(&mut graphics, |graphics| graphics.render_mapdata(false));
-		assert!(lit(&pixels) > 2000, "the map fills the view, {} pixels lit", lit(&pixels));
+		assert!(
+			lit(&pixels) > 2000,
+			"the map fills the view, {} pixels lit",
+			lit(&pixels)
+		);
 	}
 
 	#[test]
@@ -811,24 +901,38 @@ mod tests {
 		// Untextured, the vertex colour is the whole answer, so the lit array paints
 		// white and the darkened one paints 0.8 of white. Neither is empty, and each is
 		// flat, which is what makes the flat shaded model flat.
-		let lit_frame = render(&mut graphics, |graphics| graphics.render_model(id, -1, false, false, false));
+		let lit_frame = render(&mut graphics, |graphics| {
+			graphics.render_model(id, -1, false, false, false)
+		});
 		assert!(lit(&lit_frame) > 100);
 		assert_eq!(painted(&lit_frame), vec![[255, 255, 255]]);
 
-		let dark_frame = render(&mut graphics, |graphics| graphics.render_model(id, -1, true, false, false));
+		let dark_frame = render(&mut graphics, |graphics| {
+			graphics.render_model(id, -1, true, false, false)
+		});
 		assert!(lit(&dark_frame) > 100);
 		assert_eq!(painted(&dark_frame), vec![[204, 204, 204]], "0.8 of white");
 
 		// nomodel replaces the model with its axes, which are orange.
-		let axes = render(&mut graphics, |graphics| graphics.render_model(id, -1, false, false, true));
+		let axes = render(&mut graphics, |graphics| {
+			graphics.render_model(id, -1, false, false, true)
+		});
 		assert!(lit(&axes) > 20);
-		assert!(axes.chunks_exact(4).any(|pixel| pixel == [255, 127, 0, 255]), "an orange axis line");
+		assert!(
+			axes.chunks_exact(4)
+				.any(|pixel| pixel == [255, 127, 0, 255]),
+			"an orange axis line"
+		);
 
 		// An id with nothing behind it draws nothing, which is the branch the callers that
 		// pass a model that failed to load depend on.
-		let empty = render(&mut graphics, |graphics| graphics.render_model(-1, -1, false, false, false));
+		let empty = render(&mut graphics, |graphics| {
+			graphics.render_model(-1, -1, false, false, false)
+		});
 		assert_eq!(lit(&empty), 0);
-		let empty = render(&mut graphics, |graphics| graphics.render_model(id + 1, -1, false, false, false));
+		let empty = render(&mut graphics, |graphics| {
+			graphics.render_model(id + 1, -1, false, false, false)
+		});
 		assert_eq!(lit(&empty), 0);
 	}
 
@@ -841,25 +945,40 @@ mod tests {
 		graphics.set_camera(-2.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 		graphics.set_world_transform(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 
-		let opaque = render(&mut graphics, |graphics| graphics.render_board(texture, 1.0, false));
+		let opaque = render(&mut graphics, |graphics| {
+			graphics.render_board(texture, 1.0, false)
+		});
 		assert!(lit(&opaque) > 100, "the board is drawn");
 
 		// Alpha 0 leaves the frame as it was cleared, which is also the case the alpha
 		// test in `start_render` rejects.
-		let clear = render(&mut graphics, |graphics| graphics.render_board(texture, 0.0, false));
+		let clear = render(&mut graphics, |graphics| {
+			graphics.render_board(texture, 0.0, false)
+		});
 		assert_eq!(lit(&clear), 0);
 
 		// A board with no texture is not drawn at all, so the texture failing to load
 		// leaves the caller with nothing rather than a white square.
-		let clear = render(&mut graphics, |graphics| graphics.render_board(-1, 1.0, false));
+		let clear = render(&mut graphics, |graphics| {
+			graphics.render_board(-1, 1.0, false)
+		});
 		assert_eq!(lit(&clear), 0);
-		let clear = render(&mut graphics, |graphics| graphics.render_board(texture + 1, 1.0, false));
+		let clear = render(&mut graphics, |graphics| {
+			graphics.render_board(texture + 1, 1.0, false)
+		});
 		assert_eq!(lit(&clear), 0);
 
 		// nomodel is the four grey edges instead of the quad.
-		let edges = render(&mut graphics, |graphics| graphics.render_board(texture, 1.0, true));
+		let edges = render(&mut graphics, |graphics| {
+			graphics.render_board(texture, 1.0, true)
+		});
 		assert!(lit(&edges) > 20);
-		assert!(edges.chunks_exact(4).any(|pixel| pixel == [191, 191, 191, 255]), "a grey edge");
+		assert!(
+			edges
+				.chunks_exact(4)
+				.any(|pixel| pixel == [191, 191, 191, 255]),
+			"a grey edge"
+		);
 	}
 
 	#[test]
@@ -868,12 +987,16 @@ mod tests {
 		let (width, height) = (graphics.width(), graphics.height());
 
 		// Zero is the early out, so the frame is the black it cleared to.
-		let dark = render(&mut graphics, |graphics| graphics.screen_brightness(width, height, 0));
+		let dark = render(&mut graphics, |graphics| {
+			graphics.screen_brightness(width, height, 0)
+		});
 		assert_eq!(lit(&dark), 0);
 
 		// Brightness 4 is white at 0.08 alpha over everything, which lifts the black to 20
 		// without filling it, and reaches every corner of the frame.
-		let bright = render(&mut graphics, |graphics| graphics.screen_brightness(width, height, 4));
+		let bright = render(&mut graphics, |graphics| {
+			graphics.screen_brightness(width, height, 4)
+		});
 		assert_eq!(lit(&bright), (SIZE * SIZE) as usize, "the whole frame");
 		assert_eq!(pixel(&bright, 0, 0), [20, 20, 20, 255]);
 		assert_eq!(pixel(&bright, SIZE - 1, SIZE - 1), [20, 20, 20, 255]);
@@ -892,7 +1015,11 @@ mod tests {
 			graphics.render_line(0.0, -20.0, -20.0, 0.0, 20.0, 20.0, red)
 		});
 		assert!(lit(&pixels) > 10, "the line is drawn");
-		assert_eq!(painted(&pixels), vec![[255, 0, 0]], "the line is its own colour");
+		assert_eq!(
+			painted(&pixels),
+			vec![[255, 0, 0]],
+			"the line is its own colour"
+		);
 
 		// The centerline is the three axes at the world origin, and it resets the world
 		// transform itself, or the last model's origin would move it.
@@ -902,8 +1029,14 @@ mod tests {
 		// The x axis runs along the view direction and lands on the centre point, where it
 		// is one pixel or none at all, so only the other two are asserted.
 		let colours = painted(&pixels);
-		assert!(colours.contains(&[0, 255, 0]), "the y axis is green: {colours:?}");
-		assert!(colours.contains(&[0, 0, 255]), "the z axis is blue: {colours:?}");
+		assert!(
+			colours.contains(&[0, 255, 0]),
+			"the y axis is green: {colours:?}"
+		);
+		assert!(
+			colours.contains(&[0, 0, 255]),
+			"the z axis is blue: {colours:?}"
+		);
 	}
 
 	#[test]
@@ -918,7 +1051,11 @@ mod tests {
 			ndc_quad(graphics, 0.5, MID);
 			graphics.end_effect_render();
 		});
-		assert_eq!(pixel(&pixels, SIZE / 2, SIZE / 2), [255, 255, 255, 255], "the wall");
+		assert_eq!(
+			pixel(&pixels, SIZE / 2, SIZE / 2),
+			[255, 255, 255, 255],
+			"the wall"
+		);
 	}
 
 	#[test]

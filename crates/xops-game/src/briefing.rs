@@ -243,8 +243,14 @@ impl Briefing {
 	/// The upstream `briefing::Render2D`.
 	fn render_2d(&mut self, d3dg: &mut D3DGraphics, config: &Config) {
 		let framecnt = self.base.scene.framecnt;
-		let effect_a = self.base.scene.get_effect_alpha_loop(framecnt, 0.8, 0.7, true);
-		let effect_b = self.base.scene.get_effect_alpha_loop(framecnt, 0.8, 1.0, true);
+		let effect_a = self
+			.base
+			.scene
+			.get_effect_alpha_loop(framecnt, 0.8, 0.7, true);
+		let effect_b = self
+			.base
+			.scene
+			.get_effect_alpha_loop(framecnt, 0.8, 1.0, true);
 		// The blinking prompt grows and shrinks once a second, `framecnt % GAMEFPS`.
 		let cycle = framecnt % GAMEFPS as u32;
 		let effect_b_w = (cycle as f32 * 0.2 + 18.0) as i32;
@@ -338,7 +344,12 @@ impl Briefing {
 
 	/// The upstream `briefing::Destroy`: the two images and the title go back to the
 	/// renderer, and the state machine moves on.
-	pub fn destroy(&mut self, d3dg: &mut D3DGraphics, state: &mut StateMachine, log: &mut DebugLog) {
+	pub fn destroy(
+		&mut self,
+		d3dg: &mut D3DGraphics,
+		state: &mut StateMachine,
+		log: &mut DebugLog,
+	) {
 		d3dg.cleanup_texture(self.texture_a);
 		d3dg.cleanup_texture(self.texture_b);
 		self.base.destroy(d3dg, state, log);
@@ -415,10 +426,10 @@ impl Result {
 	/// The upstream `result::Render2D`.
 	fn render_2d(&mut self, d3dg: &mut D3DGraphics, config: &Config) {
 		let _ = config;
-		let effect_a = self
-			.base
-			.scene
-			.get_effect_alpha_loop(self.base.scene.framecnt, 1.0, 0.8, true);
+		let effect_a =
+			self.base
+				.scene
+				.get_effect_alpha_loop(self.base.scene.framecnt, 1.0, 0.8, true);
 
 		// The background image is drawn automatically by D2Dscene::render_main.
 
@@ -467,7 +478,12 @@ impl Result {
 	}
 
 	/// The upstream `result::Destroy`, which is `D2Dscene::Destroy`.
-	pub fn destroy(&mut self, d3dg: &mut D3DGraphics, state: &mut StateMachine, log: &mut DebugLog) {
+	pub fn destroy(
+		&mut self,
+		d3dg: &mut D3DGraphics,
+		state: &mut StateMachine,
+		log: &mut DebugLog,
+	) {
 		self.base.destroy(d3dg, state, log);
 	}
 }
@@ -485,11 +501,8 @@ mod tests {
 	/// Writes bytes to a temp file and returns the path as the byte path the loaders
 	/// take.
 	fn temp_write(name: &str, bytes: &[u8]) -> Vec<u8> {
-		let path = std::env::temp_dir().join(format!(
-			"xops_briefing_{}_{}",
-			std::process::id(),
-			name
-		));
+		let path =
+			std::env::temp_dir().join(format!("xops_briefing_{}_{}", std::process::id(), name));
 		xops_platform::fs::write_file(&path, bytes).unwrap();
 		path.to_string_lossy().into_owned().into_bytes()
 	}
@@ -559,7 +572,8 @@ mod tests {
 		assert!(mission_name(&mif, &ParameterInfo::new(), &unknown).is_empty());
 
 		// A `.mif` carries its own full name.
-		let mif_bytes = b"MISSION1\nMission One\ntemp.bd1\ntemp.pd1\n1\n0\n!\n!\n!\nLine one\nLine two\n";
+		let mif_bytes =
+			b"MISSION1\nMission One\ntemp.bd1\ntemp.pd1\n1\n0\n!\n!\n!\nLine one\nLine two\n";
 		let path = temp_write("addon.mif", mif_bytes);
 		let mut mif = MIFInterface::new();
 		assert_eq!(mif.load_file_data(&path, true), 0);
@@ -605,11 +619,20 @@ mod tests {
 			headshot: 0,
 			..GameInfo::default()
 		};
-		let failed = GameInfo { missioncomplete: false, ..base };
-		let completed = GameInfo { missioncomplete: true, ..base };
+		let failed = GameInfo {
+			missioncomplete: false,
+			..base
+		};
+		let completed = GameInfo {
+			missioncomplete: true,
+			..base
+		};
 
 		// Only the outcome line differs, the totals are the ones GameInfo holds.
-		assert_ne!(result_outcome(failed.missioncomplete), result_outcome(completed.missioncomplete));
+		assert_ne!(
+			result_outcome(failed.missioncomplete),
+			result_outcome(completed.missioncomplete)
+		);
 		assert_eq!(result_lines(&failed), result_lines(&completed));
 		assert_eq!(result_lines(&failed)[3], b"Accuracy rate  20.0%");
 	}
@@ -624,5 +647,4 @@ mod tests {
 		assert_eq!(hit_rate(&info), 0.0);
 		assert_eq!(result_lines(&info)[3], b"Accuracy rate  0.0%");
 	}
-
 }

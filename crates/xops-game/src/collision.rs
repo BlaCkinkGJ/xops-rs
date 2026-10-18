@@ -35,10 +35,9 @@ pub const COLLISION_ADDSIZE: f32 = 0.01;
 pub use crate::object::{
 	HUMAN_MAPCOLLISION_ADD_HEIGHT_A, HUMAN_MAPCOLLISION_ADD_HEIGHT_B,
 	HUMAN_MAPCOLLISION_CHECK_HEIGHT, HUMAN_MAPCOLLISION_CHECK_MAXDIST,
-	HUMAN_MAPCOLLISION_CLIMBADDY, HUMAN_MAPCOLLISION_CLIMBHEIGHT,
-	HUMAN_MAPCOLLISION_GROUND_HEIGHT, HUMAN_MAPCOLLISION_GROUND_R1,
-	HUMAN_MAPCOLLISION_GROUND_R2, HUMAN_MAPCOLLISION_GROUND_R3, HUMAN_MAPCOLLISION_HEIGHT,
-	HUMAN_MAPCOLLISION_R, HUMAN_MAPCOLLISION_SLOPEANGLE,
+	HUMAN_MAPCOLLISION_CLIMBADDY, HUMAN_MAPCOLLISION_CLIMBHEIGHT, HUMAN_MAPCOLLISION_GROUND_HEIGHT,
+	HUMAN_MAPCOLLISION_GROUND_R1, HUMAN_MAPCOLLISION_GROUND_R2, HUMAN_MAPCOLLISION_GROUND_R3,
+	HUMAN_MAPCOLLISION_HEIGHT, HUMAN_MAPCOLLISION_R, HUMAN_MAPCOLLISION_SLOPEANGLE,
 };
 
 // ---------------------------------------------------------------------------
@@ -307,8 +306,18 @@ impl Collision {
 		}
 
 		collide_box_aabb(
-			min_x, min_y, min_z, max_x, max_y, max_z, block.min_x, block.min_y, block.min_z,
-			block.max_x, block.max_y, block.max_z,
+			min_x,
+			min_y,
+			min_z,
+			max_x,
+			max_y,
+			max_z,
+			block.min_x,
+			block.min_y,
+			block.min_z,
+			block.max_x,
+			block.max_y,
+			block.max_z,
 		)
 	}
 
@@ -476,12 +485,7 @@ impl Collision {
 		// compare with the face normal. Each edge runs from one vertex of the face to the
 		// next in the order the face table gives them, and a cross product that leans
 		// away from the normal is on the outside of that edge.
-		let edges = [
-			(v[0], v[1]),
-			(v[1], v[2]),
-			(v[2], v[3]),
-			(v[3], v[0]),
-		];
+		let edges = [(v[0], v[1]), (v[1], v[2]), (v[2], v[3]), (v[3], v[0])];
 		for (a, b) in edges {
 			// Cross product.
 			let vx2 = ((block.y[b] - block.y[a]) * (z - block.z[a]))
@@ -663,8 +667,18 @@ impl Collision {
 					if block.worldgroup == worldgroup_a {
 						// Check between the bounding boxes.
 						if !collide_box_aabb(
-							block.min_x, block.min_y, block.min_z, block.max_x, block.max_y,
-							block.max_z, rmin_x, rmin_y, rmin_z, rmax_x, rmax_y, rmax_z,
+							block.min_x,
+							block.min_y,
+							block.min_z,
+							block.max_x,
+							block.max_y,
+							block.max_z,
+							rmin_x,
+							rmin_y,
+							rmin_z,
+							rmax_x,
+							rmax_y,
+							rmax_z,
 						) {
 							return None;
 						}
@@ -675,13 +689,25 @@ impl Collision {
 
 		// Check between the bounding box and the ray.
 		collide_aabb_ray(
-			block.min_x, block.min_y, block.min_z, block.max_x, block.max_y, block.max_z,
-			ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, -1.0,
+			block.min_x,
+			block.min_y,
+			block.min_z,
+			block.max_x,
+			block.max_y,
+			block.max_z,
+			ray_pos_x,
+			ray_pos_y,
+			ray_pos_z,
+			ray_dir_x,
+			ray_dir_y,
+			ray_dir_z,
+			-1.0,
 		)?;
 
 		// Check for each polygon.
 		for i in 0..6 {
-			if self.check_polygon_front(block_data_if, blockid, i, ray_pos_x, ray_pos_y, ray_pos_z) {
+			if self.check_polygon_front(block_data_if, blockid, i, ray_pos_x, ray_pos_y, ray_pos_z)
+			{
 				if let Some(p_dist) = self.check_intersect_tri(
 					block_data_if,
 					blockid,
@@ -781,8 +807,18 @@ impl Collision {
 						if block.worldgroup == worldgroup_a {
 							// Check between the bounding boxes.
 							if !collide_box_aabb(
-								block.min_x, block.min_y, block.min_z, block.max_x, block.max_y,
-								block.max_z, rmin_x, rmin_y, rmin_z, rmax_x, rmax_y, rmax_z,
+								block.min_x,
+								block.min_y,
+								block.min_z,
+								block.max_x,
+								block.max_y,
+								block.max_z,
+								rmin_x,
+								rmin_y,
+								rmin_z,
+								rmax_x,
+								rmax_y,
+								rmax_z,
 							) {
 								// If not hit, do not examine this block.
 								continue;
@@ -794,8 +830,19 @@ impl Collision {
 
 			// Check between the bounding box and the ray.
 			if collide_aabb_ray(
-				block.min_x, block.min_y, block.min_z, block.max_x, block.max_y, block.max_z,
-				ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, -1.0,
+				block.min_x,
+				block.min_y,
+				block.min_z,
+				block.max_x,
+				block.max_y,
+				block.max_z,
+				ray_pos_x,
+				ray_pos_y,
+				ray_pos_z,
+				ray_dir_x,
+				ray_dir_y,
+				ray_dir_z,
+				-1.0,
 			)
 			.is_none()
 			{
@@ -805,8 +852,14 @@ impl Collision {
 
 			// Check for each polygon.
 			for face in 0..6 {
-				if self.check_polygon_front(block_data_if, blockid, face, ray_pos_x, ray_pos_y, ray_pos_z)
-				{
+				if self.check_polygon_front(
+					block_data_if,
+					blockid,
+					face,
+					ray_pos_x,
+					ray_pos_y,
+					ray_pos_z,
+				) {
 					if let Some(p_dist) = self.check_intersect_tri(
 						block_data_if,
 						blockid,
@@ -881,14 +934,8 @@ impl Collision {
 		// and lets the bounds check inside CheckBlockInside reject the rest.
 		for i in 0..MAX_BLOCKS as i32 {
 			// End point.
-			let (end_buried, end_face) = self.check_block_inside(
-				block_data_if,
-				i,
-				ray_pos3_x,
-				ray_pos3_y,
-				ray_pos3_z,
-				true,
-			);
+			let (end_buried, end_face) =
+				self.check_block_inside(block_data_if, i, ray_pos3_x, ray_pos3_y, ray_pos3_z, true);
 			if end_buried {
 				// Upstream runs the start point check before this one and reports the
 				// face that saw, because a buried point reports no face of its own.
@@ -904,14 +951,8 @@ impl Collision {
 			}
 
 			// Mid point.
-			let (mid_buried, _) = self.check_block_inside(
-				block_data_if,
-				i,
-				ray_pos2_x,
-				ray_pos2_y,
-				ray_pos2_z,
-				true,
-			);
+			let (mid_buried, _) =
+				self.check_block_inside(block_data_if, i, ray_pos2_x, ray_pos2_y, ray_pos2_z, true);
 			if mid_buried {
 				// The end point carries its face over, since it was not buried.
 				return Some((i, end_face));
@@ -1289,8 +1330,9 @@ pub fn collide_sphere_ray(
 ) -> Option<f32> {
 	if max_dist > 0.0 {
 		// Build the ray AABB.
-		let (pmin_x, pmin_y, pmin_z, pmax_x, pmax_y, pmax_z) =
-			get_aabb_ray(ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, max_dist);
+		let (pmin_x, pmin_y, pmin_z, pmax_x, pmax_y, pmax_z) = get_aabb_ray(
+			ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, max_dist,
+		);
 
 		// Check between the bounding boxes.
 		if !collide_box_aabb(
@@ -1388,8 +1430,9 @@ pub fn collide_aabb_ray(
 
 	if max_dist > 0.0 {
 		// Build the ray AABB.
-		let (pmin_x, pmin_y, pmin_z, pmax_x, pmax_y, pmax_z) =
-			get_aabb_ray(ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, max_dist);
+		let (pmin_x, pmin_y, pmin_z, pmax_x, pmax_y, pmax_z) = get_aabb_ray(
+			ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, max_dist,
+		);
 
 		// Check between the bounding boxes.
 		if !collide_box_aabb(
@@ -1788,10 +1831,7 @@ pub fn get_2d_line_in_box(
 		if let Some((x, y)) = collide_2d_line(ex1, ey1, ex2, ey2, line.0, line.1, line.2, line.3) {
 			// If the start point is inside the rectangle, rewrite the end point,
 			// otherwise (that is, the end point is inside) rewrite the start point.
-			if (box_x1 <= line.0)
-				&& (line.0 <= box_x2)
-				&& (box_y1 <= line.1)
-				&& (line.1 <= box_y2)
+			if (box_x1 <= line.0) && (line.0 <= box_x2) && (box_y1 <= line.1) && (line.1 <= box_y2)
 			{
 				line.2 = x;
 				line.3 = y;
@@ -1987,8 +2027,14 @@ mod tests {
 		// The unit cube grew outwards, so the x = 1 face of the raw cube is at
 		// 1 + 0.0057735 and the corner vertices are the grown ones.
 		let (min_x, min_y, min_z, max_x, max_y, max_z) = coll.get_block_pos_minmax(0).unwrap();
-		assert!((min_x - (-GROWN_FACE - COLLISION_ADDSIZE)).abs() < 1e-5, "{min_x}");
-		assert!((max_x - (1.0 + GROWN_FACE + COLLISION_ADDSIZE)).abs() < 1e-5, "{max_x}");
+		assert!(
+			(min_x - (-GROWN_FACE - COLLISION_ADDSIZE)).abs() < 1e-5,
+			"{min_x}"
+		);
+		assert!(
+			(max_x - (1.0 + GROWN_FACE + COLLISION_ADDSIZE)).abs() < 1e-5,
+			"{max_x}"
+		);
 		assert!((min_y - min_x).abs() < 1e-6);
 		assert!((min_z - min_x).abs() < 1e-6);
 		assert!((max_y - max_x).abs() < 1e-6);
@@ -2027,7 +2073,10 @@ mod tests {
 		let (blocks, coll) = cube_map("point_inside.bd1", 1);
 
 		// Inside the cube: no face is front-facing, so the point is buried.
-		assert_eq!(coll.check_block_inside(&blocks, 0, 0.5, 0.5, 0.5, true), (true, 0));
+		assert_eq!(
+			coll.check_block_inside(&blocks, 0, 0.5, 0.5, 0.5, true),
+			(true, 0)
+		);
 		assert!(coll.check_all_block_inside(&blocks, 0.5, 0.5, 0.5));
 
 		// Just outside the grown block on the +Z side, still within its bounds: face 1 is
@@ -2037,7 +2086,10 @@ mod tests {
 
 		// Further out the rough pre-check rejects the block before any face is looked at,
 		// and upstream leaves the caller's face variable alone there.
-		assert_eq!(coll.check_block_inside(&blocks, 0, 0.5, 0.5, 2.0, true), (false, 0));
+		assert_eq!(
+			coll.check_block_inside(&blocks, 0, 0.5, 0.5, 2.0, true),
+			(false, 0)
+		);
 		assert!(!coll.check_all_block_inside(&blocks, 0.5, 0.5, 2.0));
 
 		// The block was grown by COLLISION_ADDSIZE, so a point just beyond the raw face
@@ -2057,7 +2109,10 @@ mod tests {
 		assert!(!coll.check_block_inside(&blocks, 0, 5.0, 0.5, 0.5, false).0);
 
 		// Ids and faces outside the data are refused.
-		assert_eq!(coll.check_block_inside(&blocks, 5, 0.5, 0.5, 0.5, true), (false, 0));
+		assert_eq!(
+			coll.check_block_inside(&blocks, 5, 0.5, 0.5, 0.5, true),
+			(false, 0)
+		);
 		assert!(!coll.check_polygon_front(&blocks, 0, 6, 0.5, 0.5, 0.5));
 		assert!(!coll.check_polygon_front(&blocks, 0, -1, 0.5, 0.5, 0.5));
 		assert!(!coll.check_polygon_front_rx(&blocks, 0, 6, 0.0));
@@ -2272,7 +2327,10 @@ mod tests {
 
 		// Angles: head on is 90 degrees with the sign flipped, parallel is nothing.
 		let head_on = coll.angle_vector(&blocks, 0, 0, 0.0, 0.0, -1.0).unwrap();
-		assert!((head_on + std::f32::consts::FRAC_PI_2).abs() < 1e-6, "{head_on}");
+		assert!(
+			(head_on + std::f32::consts::FRAC_PI_2).abs() < 1e-6,
+			"{head_on}"
+		);
 		let parallel = coll.angle_vector(&blocks, 0, 0, 1.0, 0.0, 0.0).unwrap();
 		assert!(parallel.abs() < 1e-6);
 
@@ -2321,9 +2379,7 @@ mod tests {
 	fn rays_enter_boxes_and_are_measured_from_the_start() {
 		// Starting inside is a hit at zero.
 		assert_eq!(
-			collide_aabb_ray(
-				0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, -1.0
-			),
+			collide_aabb_ray(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, -1.0),
 			Some(0.0)
 		);
 		// From outside it is the distance to the entry point.
@@ -2347,22 +2403,21 @@ mod tests {
 		.is_none());
 
 		// A maximum distance shorter than the entry point misses.
-		assert!(collide_aabb_ray(
-			0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -5.0, 0.5, 0.5, 1.0, 0.0, 0.0, 4.0
-		)
-		.is_none());
-		assert!(collide_aabb_ray(
-			0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -5.0, 0.5, 0.5, 1.0, 0.0, 0.0, 6.0
-		)
-		.is_some());
+		assert!(
+			collide_aabb_ray(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -5.0, 0.5, 0.5, 1.0, 0.0, 0.0, 4.0)
+				.is_none()
+		);
+		assert!(
+			collide_aabb_ray(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, -5.0, 0.5, 0.5, 1.0, 0.0, 0.0, 6.0)
+				.is_some()
+		);
 	}
 
 	#[test]
 	fn the_ray_aabb_covers_both_ends() {
 		// A ray along +X from the origin: the box spans the start and the end, grown by
 		// COLLISION_ADDSIZE at both ends.
-		let (min_x, min_y, _, max_x, _, max_z) =
-			get_aabb_ray(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 10.0);
+		let (min_x, min_y, _, max_x, _, max_z) = get_aabb_ray(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 10.0);
 		assert!((min_x + COLLISION_ADDSIZE).abs() < 1e-6, "{min_x}");
 		assert!((max_x - (10.0 + COLLISION_ADDSIZE)).abs() < 1e-6, "{max_x}");
 		assert!((min_y + COLLISION_ADDSIZE).abs() < 1e-6);
@@ -2379,15 +2434,20 @@ mod tests {
 		assert!(collide_sphere_inside(0.0, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0));
 		// Exactly on the surface is not inside.
 		assert!(!collide_sphere_inside(0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0));
-		assert!(collide_sphere_inside(0.0, 0.0, 0.0, 1.0, 0.999999, 0.0, 0.0));
-		assert!(!collide_sphere_inside(0.0, 0.0, 0.0, 1.0, 1.000001, 0.0, 0.0));
+		assert!(collide_sphere_inside(
+			0.0, 0.0, 0.0, 1.0, 0.999999, 0.0, 0.0
+		));
+		assert!(!collide_sphere_inside(
+			0.0, 0.0, 0.0, 1.0, 1.000001, 0.0, 0.0
+		));
 	}
 
 	#[test]
 	fn sphere_rays_report_the_near_surface() {
 		// A sphere of radius 1 at the origin, hit along +X from -5: the surface is one
 		// radius before the closest approach point.
-		let d = collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0).unwrap();
+		let d =
+			collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0).unwrap();
 		assert!((d - 4.0).abs() < 1e-5, "{d}");
 
 		// Starting inside is a hit at zero.
@@ -2396,19 +2456,27 @@ mod tests {
 			Some(0.0)
 		);
 		// Past the sphere, and a maximum distance short of the surface, both miss.
-		assert!(collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 2.0, 0.0, 1.0, 0.0, 0.0, -1.0)
-			.is_none());
-		assert!(collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, 3.5)
-			.is_none());
+		assert!(
+			collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 2.0, 0.0, 1.0, 0.0, 0.0, -1.0).is_none()
+		);
+		assert!(
+			collide_sphere_ray(0.0, 0.0, 0.0, 1.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, 3.5).is_none()
+		);
 	}
 
 	#[test]
 	fn cylinders_are_circles_on_the_x_z_plane() {
 		// Inside on both the circle and the height.
-		assert!(collide_cylinder_inside(0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 1.0, 0.0));
+		assert!(collide_cylinder_inside(
+			0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 1.0, 0.0
+		));
 		// Outside the circle, and above the top.
-		assert!(!collide_cylinder_inside(0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 1.0, 0.9));
-		assert!(!collide_cylinder_inside(0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 2.1, 0.0));
+		assert!(!collide_cylinder_inside(
+			0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 1.0, 0.9
+		));
+		assert!(!collide_cylinder_inside(
+			0.0, 0.0, 0.0, 1.0, 2.0, 0.5, 2.1, 0.0
+		));
 
 		// A ray across the cylinder enters at the near surface.
 		let d = collide_cylinder_ray(
@@ -2421,10 +2489,10 @@ mod tests {
 			0.0, 0.0, 0.0, 1.0, 2.0, -5.0, 5.0, 0.0, 1.0, 0.0, 0.0, 100.0
 		)
 		.is_none());
-		assert!(collide_cylinder_ray(
-			0.0, 0.0, 0.0, 1.0, 2.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, 3.0
-		)
-		.is_none());
+		assert!(
+			collide_cylinder_ray(0.0, 0.0, 0.0, 1.0, 2.0, -5.0, 0.0, 0.0, 1.0, 0.0, 0.0, 3.0)
+				.is_none()
+		);
 	}
 
 	#[test]
@@ -2442,17 +2510,13 @@ mod tests {
 	#[test]
 	fn distance_to_a_ray_is_perpendicular_or_to_the_start() {
 		// Beside the ray: the perpendicular distance.
-		assert!(
-			(distance_pos_ray(0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0) - 1.0).abs() < 1e-6
-		);
+		assert!((distance_pos_ray(0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0) - 1.0).abs() < 1e-6);
 		// Behind the ray start: the distance to the start point.
 		assert!(
 			(distance_pos_ray(-3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0) - 3.0).abs() < 1e-6
 		);
 		// A direction that is not normalized still gives a world distance.
-		assert!(
-			(distance_pos_ray(0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 7.0, 0.0, 0.0) - 2.0).abs() < 1e-6
-		);
+		assert!((distance_pos_ray(0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 7.0, 0.0, 0.0) - 2.0).abs() < 1e-6);
 	}
 
 	#[test]
@@ -2468,7 +2532,10 @@ mod tests {
 			Some((0, 5, 10, 5))
 		);
 		// A line inside is untouched, and one entirely outside is refused.
-		assert_eq!(get_2d_line_in_box(1, 1, 2, 2, 0, 0, 20, 10), Some((1, 1, 2, 2)));
+		assert_eq!(
+			get_2d_line_in_box(1, 1, 2, 2, 0, 0, 20, 10),
+			Some((1, 1, 2, 2))
+		);
 		assert!(get_2d_line_in_box(-5, -5, -1, -1, 0, 0, 20, 10).is_none());
 		// An inverted rectangle is an error.
 		assert!(get_2d_line_in_box(1, 1, 2, 2, 20, 10, 0, 0).is_none());

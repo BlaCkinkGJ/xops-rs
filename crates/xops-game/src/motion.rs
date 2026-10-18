@@ -201,7 +201,9 @@ impl HumanMotionControl {
 		} else {
 			// A pickup or a switch raises the arm slowly, two degrees a frame, and stops
 			// once it is within two degrees of the aim.
-			if (degree_to_radian(-2.0) < self.reaction_y) && (self.reaction_y < degree_to_radian(2.0)) {
+			if (degree_to_radian(-2.0) < self.reaction_y)
+				&& (self.reaction_y < degree_to_radian(2.0))
+			{
 				self.reaction_y = 0.0;
 				self.slowarm = false;
 			}
@@ -258,7 +260,8 @@ impl HumanMotionControl {
 
 		// Determine the travel direction. These are the same nine directions the human's
 		// ControlProcess resolves, and the walk flag wins over all of them.
-		let direction = move_flag & (move_flag::FORWARD | move_flag::BACK | move_flag::LEFT | move_flag::RIGHT);
+		let direction =
+			move_flag & (move_flag::FORWARD | move_flag::BACK | move_flag::LEFT | move_flag::RIGHT);
 		let move_rx = if get_flag(move_flag, move_flag::WALK) {
 			degree_to_radian(0.0)
 		} else if direction == move_flag::FORWARD {
@@ -305,8 +308,8 @@ impl HumanMotionControl {
 		self.legmodelid = self.id_legmodel;
 		if hp > 0 {
 			if get_flag(move_flag, move_flag::WALK) {
-				self.legmodelid = self.id_walkmodel
-					[(self.walkcnt / 3 % TOTAL_WALKMODE as i32) as usize]; // walking
+				self.legmodelid =
+					self.id_walkmodel[(self.walkcnt / 3 % TOTAL_WALKMODE as i32) as usize]; // walking
 				self.walkcnt += 1;
 				self.runcnt = 0;
 			} else {
@@ -412,8 +415,8 @@ mod tests {
 		assert_eq!(
 			seen,
 			vec![
-				120, 120, 120, 121, 121, 121, 122, 122, 122, 123, 123, 123, 124, 124, 124, 125, 125, 125,
-				126, 126, 126, 127, 127, 127
+				120, 120, 120, 121, 121, 121, 122, 122, 122, 123, 123, 123, 124, 124, 124, 125,
+				125, 125, 126, 126, 126, 127, 127, 127
 			]
 		);
 
@@ -432,7 +435,16 @@ mod tests {
 		let mut ctrl = controller();
 		let mut seen = Vec::new();
 		for _ in 0..4 {
-			ctrl.process_object(0.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::FORWARD, 100, true);
+			ctrl.process_object(
+				0.0,
+				0.0,
+				ID_WEAPON_NONE,
+				0,
+				0,
+				move_flag::FORWARD,
+				100,
+				true,
+			);
 			seen.push(ctrl.legmodelid);
 		}
 		// runcnt / 2, so two frames per slot.
@@ -502,22 +514,43 @@ mod tests {
 		let mut ctrl = controller();
 		// A human facing -X that runs forward wants the legs at -X too: move_rx is 0, so
 		// the target is the body rotation itself.
-		ctrl.process_object(1.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::FORWARD, 100, true);
+		ctrl.process_object(
+			1.0,
+			0.0,
+			ID_WEAPON_NONE,
+			0,
+			0,
+			move_flag::FORWARD,
+			100,
+			true,
+		);
 		// 0 * 0.85 + (1.0 - 0) * 0.15
-		assert!((ctrl.legrotation_x - 0.15).abs() < 1e-6, "{}", ctrl.legrotation_x);
+		assert!(
+			(ctrl.legrotation_x - 0.15).abs() < 1e-6,
+			"{}",
+			ctrl.legrotation_x
+		);
 
 		// Running backward is more than a right angle from the body, so the leg is drawn
 		// from the other side: move_rx of PI becomes 0 after normalisation.
 		let mut back = controller();
 		back.process_object(1.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::BACK, 100, true);
 		// move_rx2 = normalise(PI + PI) = 0, so the same 0.15.
-		assert!((back.legrotation_x - 0.15).abs() < 1e-6, "{}", back.legrotation_x);
+		assert!(
+			(back.legrotation_x - 0.15).abs() < 1e-6,
+			"{}",
+			back.legrotation_x
+		);
 
 		// Sideways is a quarter turn, and the leg lags behind it.
 		let mut side = controller();
 		side.process_object(0.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::LEFT, 100, true);
 		let expected = (degree_to_radian(-90.0)) * 0.15;
-		assert!((side.legrotation_x - expected).abs() < 1e-6, "{}", side.legrotation_x);
+		assert!(
+			(side.legrotation_x - expected).abs() < 1e-6,
+			"{}",
+			side.legrotation_x
+		);
 	}
 
 	#[test]

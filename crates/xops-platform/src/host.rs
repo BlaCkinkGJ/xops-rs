@@ -278,8 +278,14 @@ impl HostWindow {
 /// not worth a shared module, and this copy stops at the NUL the way the upstream
 /// `MessageBox` did.
 fn decode(message: &[u8]) -> String {
-	let end = message.iter().position(|&b| b == 0).unwrap_or(message.len());
-	encoding_rs::SHIFT_JIS.decode(&message[..end]).0.into_owned()
+	let end = message
+		.iter()
+		.position(|&b| b == 0)
+		.unwrap_or(message.len());
+	encoding_rs::SHIFT_JIS
+		.decode(&message[..end])
+		.0
+		.into_owned()
 }
 
 #[cfg(test)]
@@ -296,7 +302,10 @@ mod tests {
 		let mut last = first;
 		while start.elapsed() < Duration::from_millis(50) {
 			let now = time_ms();
-			assert!(now >= last, "the tick count went backwards: {now} after {last}");
+			assert!(
+				now >= last,
+				"the tick count went backwards: {now} after {last}"
+			);
 			last = now;
 		}
 

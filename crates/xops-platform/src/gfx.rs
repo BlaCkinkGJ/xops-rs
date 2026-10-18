@@ -339,7 +339,8 @@ impl Gfx {
 			None => None,
 		};
 
-		let (adapter, device, queue) = pollster::block_on(Self::request(instance, surface.as_ref()))?;
+		let (adapter, device, queue) =
+			pollster::block_on(Self::request(instance, surface.as_ref()))?;
 		Self::build(
 			instance,
 			surface,
@@ -670,7 +671,10 @@ impl Gfx {
 		if self.uniform_slots_used as usize >= UNIFORM_SLOTS {
 			// The frame asked for more draws than the ring holds. Dropping them silently
 			// would look like a rendering bug, so say so and stop growing.
-			eprintln!("gfx: out of uniform slots, {} draws this frame", self.cmds.len());
+			eprintln!(
+				"gfx: out of uniform slots, {} draws this frame",
+				self.cmds.len()
+			);
 			return;
 		}
 
@@ -708,8 +712,16 @@ impl Gfx {
 	fn uniforms_for_state(&self) -> Uniforms {
 		// GL transforms a vertex by projection * modelview, whatever the current matrix
 		// mode is, so both tops are read here regardless of which one is being edited.
-		let mv = *self.state.modelview.last().expect("a stack always has a top");
-		let projection = *self.state.projection.last().expect("a stack always has a top");
+		let mv = *self
+			.state
+			.modelview
+			.last()
+			.expect("a stack always has a top");
+		let projection = *self
+			.state
+			.projection
+			.last()
+			.expect("a stack always has a top");
 		let transform = projection.mul(&mv);
 
 		Uniforms {
@@ -997,7 +1009,11 @@ impl Gfx {
 					let pipeline = &self.pipelines[&key];
 
 					pass.set_pipeline(pipeline);
-					pass.set_bind_group(0, &self.uniform_bind_group, &[uniform_slot * self.uniform_stride]);
+					pass.set_bind_group(
+						0,
+						&self.uniform_bind_group,
+						&[uniform_slot * self.uniform_stride],
+					);
 					let texture_bind = self
 						.texture_bind_groups
 						.get(&texture)
@@ -1034,7 +1050,6 @@ impl Gfx {
 				occlusion_query_set: None,
 			});
 		}
-
 	}
 
 	/// Copies the colour target to the surface and presents it.
@@ -1229,15 +1244,7 @@ impl Gfx {
 		self.multiply(&Mat4::perspective(fovy_degrees, aspect, near, far));
 	}
 
-	pub fn ortho(
-		&mut self,
-		left: f32,
-		right: f32,
-		bottom: f32,
-		top: f32,
-		near: f32,
-		far: f32,
-	) {
+	pub fn ortho(&mut self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) {
 		let mut m = Mat4::IDENTITY;
 		m.m[0] = 2.0 / (right - left);
 		m.m[5] = 2.0 / (top - bottom);
@@ -1320,7 +1327,6 @@ impl Gfx {
 	pub fn set_host_presents(&mut self, presents: bool) {
 		self.host_presents = presents;
 	}
-
 
 	pub fn blend_enabled(&self) -> bool {
 		self.state.blend
@@ -1433,7 +1439,8 @@ impl Gfx {
 				_ => {}
 			}
 		}
-		self.pending_parameters.retain(|(pending_id, _, _)| *pending_id != id);
+		self.pending_parameters
+			.retain(|(pending_id, _, _)| *pending_id != id);
 
 		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 		let sampler = make_sampler(&self.device, wrap_s, wrap_t, min_filter, mag_filter);
@@ -1578,7 +1585,9 @@ impl Gfx {
 			.device
 			.create_shader_module(wgpu::ShaderModuleDescriptor {
 				label: Some("render"),
-				source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/render.wgsl"))),
+				source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+					"../shaders/render.wgsl"
+				))),
 			});
 
 		let layout = self

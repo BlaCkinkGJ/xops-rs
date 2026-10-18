@@ -53,7 +53,12 @@ struct Voice {
 
 impl Default for Voice {
 	fn default() -> Self {
-		Voice { active: false, id: 0, pos: 0, gain: 0.0 }
+		Voice {
+			active: false,
+			id: 0,
+			pos: 0,
+			gain: 0.0,
+		}
 	}
 }
 
@@ -101,7 +106,10 @@ impl Mixer {
 	pub fn load(&mut self, wav: &[u8]) -> Option<usize> {
 		let id = self.slots.iter().position(|slot| !slot.used)?;
 		let samples = decode_wav(wav, self.sample_rate)?;
-		self.slots[id] = Slot { used: true, samples };
+		self.slots[id] = Slot {
+			used: true,
+			samples,
+		};
 		Some(id)
 	}
 
@@ -141,7 +149,12 @@ impl Mixer {
 		};
 
 		let gain = ((volume.clamp(-100, 100) + 100) as f32 / 200.0).clamp(0.0, 1.0);
-		self.voices[voice] = Voice { active: true, id: slot, pos: 0, gain };
+		self.voices[voice] = Voice {
+			active: true,
+			id: slot,
+			pos: 0,
+			gain,
+		};
 
 		1
 	}
@@ -195,7 +208,8 @@ impl Mixer {
 			while done < frames && voice.pos + done < source_frames {
 				for c in 0..CHANNELS {
 					let mixed = out[done * CHANNELS + c] as i32
-						+ (slot.samples[(voice.pos + done) * CHANNELS + c] as f32 * voice.gain) as i32;
+						+ (slot.samples[(voice.pos + done) * CHANNELS + c] as f32 * voice.gain)
+							as i32;
 					out[done * CHANNELS + c] = mixed.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
 				}
 				done += 1;
@@ -289,7 +303,9 @@ pub fn decode_wav(data: &[u8], rate: u32) -> Option<Vec<i16>> {
 			frame[c] = match (format, bits) {
 				(1, 8) => (s[0] as i16 - 128) * 256,
 				(1, 16) => i16::from_le_bytes([s[0], s[1]]),
-				_ => (f32::from_le_bytes([s[0], s[1], s[2], s[3]]).clamp(-1.0, 1.0) * 32767.0) as i16,
+				_ => {
+					(f32::from_le_bytes([s[0], s[1], s[2], s[3]]).clamp(-1.0, 1.0) * 32767.0) as i16
+				}
 			};
 		}
 
@@ -514,8 +530,8 @@ mod tests {
 	fn game_wav_loads_when_the_game_data_is_present() {
 		// The game's sound data is not redistributable and is not in git, so this test
 		// reports its reason and passes when it is not on the machine.
-		let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("../../data/sound/can.wav");
+		let path =
+			std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/sound/can.wav");
 		let Ok(data) = crate::fs::read_file(crate::path::resolve_case_insensitive(&path)) else {
 			println!("skipping: {} is not present", path.display());
 			return;
@@ -541,7 +557,10 @@ mod tests {
 			}
 		}
 
-		assert!(mixed > 1000, "the wav decoded to almost nothing: {mixed} frames");
+		assert!(
+			mixed > 1000,
+			"the wav decoded to almost nothing: {mixed} frames"
+		);
 		let (left, right) = first.expect("the loaded wav mixed as silence");
 		// The file is 16 bit mono, so both channels carry the same sample.
 		assert_eq!(left, right);
@@ -671,7 +690,10 @@ mod tests {
 		wav[34] = 8;
 		wav[35] = 0;
 		let samples = decode_wav(&wav, SAMPLE_RATE).unwrap();
-		assert_eq!(samples, vec![0, 0, -32768, -32768, -32768, -32768, -32768, -32768]);
+		assert_eq!(
+			samples,
+			vec![0, 0, -32768, -32768, -32768, -32768, -32768, -32768]
+		);
 
 		// A data chunk that claims more than the file holds reads to the end and stops.
 		let mut wav = pcm16_wav(&[1000, 2000, 3000, 4000], 1, SAMPLE_RATE);

@@ -97,10 +97,12 @@ impl ModelTable {
 	/// Loads a model file into the first free slot. Returns the slot, or -1 on failure,
 	/// which is the upstream contract the callers branch on.
 	pub fn load(&mut self, path: &std::path::Path) -> i32 {
-		let data = match xops_platform::fs::read_file(xops_platform::path::resolve_case_insensitive(path)) {
-			Ok(data) => data,
-			Err(_) => return -1,
-		};
+		let data =
+			match xops_platform::fs::read_file(xops_platform::path::resolve_case_insensitive(path))
+			{
+				Ok(data) => data,
+				Err(_) => return -1,
+			};
 		let model = match parse_model_file(&data) {
 			Ok(model) => model,
 			Err(_) => return -1,
@@ -143,8 +145,12 @@ impl ModelTable {
 		// The material comes from A alone, so a morph between two differently coloured
 		// models keeps the first one's colour.
 		model.color_ary.copy_from_slice(&a.color_ary[..count * 4]);
-		model.color_gray_ary.copy_from_slice(&a.color_gray_ary[..count * 4]);
-		model.tex_coord_ary.copy_from_slice(&a.tex_coord_ary[..count * 2]);
+		model
+			.color_gray_ary
+			.copy_from_slice(&a.color_gray_ary[..count * 4]);
+		model
+			.tex_coord_ary
+			.copy_from_slice(&a.tex_coord_ary[..count * 2]);
 
 		self.slots[id] = Some(model);
 		id as i32
@@ -204,7 +210,13 @@ pub fn parse_model_file(data: &[u8]) -> Result<ModelData, String> {
 			let x = next_f32(&mut tokens) * -1.0;
 			let y = next_f32(&mut tokens);
 			let z = next_f32(&mut tokens);
-			vertices.push(XVertex { x, y, z, u: 0.0, v: 0.0 });
+			vertices.push(XVertex {
+				x,
+				y,
+				z,
+				u: 0.0,
+				v: 0.0,
+			});
 		}
 
 		// One line sits between the vertex list and the polygon count. Upstream reads it
@@ -508,7 +520,10 @@ Mesh {
 		let model = parse_model_file(TRIANGLE).expect("parse");
 		assert_eq!(model.color_ary.len(), 24);
 		for step in 0..6 {
-			assert_eq!(&model.color_ary[step * 4..step * 4 + 4], &[1.0, 1.0, 1.0, 1.0]);
+			assert_eq!(
+				&model.color_ary[step * 4..step * 4 + 4],
+				&[1.0, 1.0, 1.0, 1.0]
+			);
 			assert_eq!(
 				&model.color_gray_ary[step * 4..step * 4 + 4],
 				&[0.8, 0.8, 0.8, 1.0]
@@ -652,7 +667,10 @@ Mesh {
 	#[test]
 	fn loading_a_missing_file_fails_with_the_upstream_code() {
 		let mut table = ModelTable::new();
-		assert_eq!(table.load(std::path::Path::new("/nonexistent/xops.none")), -1);
+		assert_eq!(
+			table.load(std::path::Path::new("/nonexistent/xops.none")),
+			-1
+		);
 		assert_eq!(table.get_total(), 0);
 	}
 }

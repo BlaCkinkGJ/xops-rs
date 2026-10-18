@@ -57,7 +57,9 @@ pub fn resolve_case_insensitive(path: &Path) -> PathBuf {
 				let found = crate::fs::read_dir_names(&directory)
 					.ok()
 					.and_then(|names| {
-						names.into_iter().find(|entry| entry.to_lowercase() == wanted)
+						names
+							.into_iter()
+							.find(|entry| entry.to_lowercase() == wanted)
 					});
 				match found {
 					Some(actual) => resolved.push(actual),
@@ -127,7 +129,9 @@ mod tests {
 		// case name and the file is lower case.
 		let dir = TempDir::new("name");
 		if !filesystem_is_case_sensitive(dir.path()) {
-			eprintln!("skipping: this filesystem already ignores case, so there is nothing to resolve");
+			eprintln!(
+				"skipping: this filesystem already ignores case, so there is nothing to resolve"
+			);
 			return;
 		}
 		crate::fs::write_file(dir.path().join("kabe.bmp"), b"x").expect("write");
@@ -141,7 +145,9 @@ mod tests {
 	fn every_component_of_a_path_is_matched() {
 		let dir = TempDir::new("components");
 		if !filesystem_is_case_sensitive(dir.path()) {
-			eprintln!("skipping: this filesystem already ignores case, so there is nothing to resolve");
+			eprintln!(
+				"skipping: this filesystem already ignores case, so there is nothing to resolve"
+			);
 			return;
 		}
 		std::fs::create_dir_all(dir.path().join("data/map0")).expect("mkdir");
@@ -176,7 +182,9 @@ mod tests {
 		// read, so this is the case that catches a walk starting in the wrong place. It
 		// needs a case-sensitive filesystem and a file whose name it can mismatch.
 		if !filesystem_is_case_sensitive(Path::new(".")) {
-			eprintln!("skipping: this filesystem already ignores case, so there is nothing to resolve");
+			eprintln!(
+				"skipping: this filesystem already ignores case, so there is nothing to resolve"
+			);
 			return;
 		}
 		if !Path::new("Cargo.toml").is_file() {
@@ -203,7 +211,10 @@ mod tests {
 		crate::fs::write_file(dir.path().join("kabe.bmp"), b"x").expect("write");
 
 		let asked = dir.path().join("KABE.BMP");
-		assert!(asked.is_file(), "the premise: the filesystem matched it already");
+		assert!(
+			asked.is_file(),
+			"the premise: the filesystem matched it already"
+		);
 		assert_eq!(resolve_case_insensitive(&asked), asked);
 	}
 }

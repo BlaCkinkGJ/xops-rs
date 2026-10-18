@@ -29,8 +29,8 @@
 //! Everything is atomic and the printing happens once a second, so a frame that takes
 //! longer than a second prints one line rather than flooding.
 
-use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 /// When the trace started printing, and when it last did.
 static START: OnceLock<std::time::Instant> = OnceLock::new();

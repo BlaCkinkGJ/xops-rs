@@ -15,7 +15,11 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
-	pub const ZERO: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+	pub const ZERO: Vec3 = Vec3 {
+		x: 0.0,
+		y: 0.0,
+		z: 0.0,
+	};
 
 	pub const fn new(x: f32, y: f32, z: f32) -> Vec3 {
 		Vec3 { x, y, z }
@@ -503,7 +507,11 @@ mod tests {
 	#[test]
 	fn look_at_puts_the_eye_at_the_origin_facing_forward() {
 		let mut mv = Mat4::IDENTITY;
-		mv.mult_look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0));
+		mv.mult_look_at(
+			Vec3::new(0.0, 0.0, 10.0),
+			Vec3::ZERO,
+			Vec3::new(0.0, 1.0, 0.0),
+		);
 		// The origin should land ten units in front of the camera, which GL writes as
 		// negative z in view space.
 		let origin = mv.transform_point(Vec3::ZERO);
@@ -534,7 +542,10 @@ mod tests {
 		let ahead = mv.transform_point(center);
 		assert!(ahead.x.abs() < 1e-4, "{ahead:?}");
 		assert!(ahead.y.abs() < 1e-4, "{ahead:?}");
-		assert!(ahead.z < 0.0, "the target is in front of the camera: {ahead:?}");
+		assert!(
+			ahead.z < 0.0,
+			"the target is in front of the camera: {ahead:?}"
+		);
 
 		// And it is a rigid rotation, so nothing is scaled or sheared on the way.
 		let origin = mv.transform_point(Vec3::ZERO);
@@ -542,6 +553,9 @@ mod tests {
 		let y_axis = mv.transform_point(Vec3::new(0.0, 1.0, 0.0)) - origin;
 		assert!((x_axis.length() - 1.0).abs() < 1e-4, "{x_axis:?}");
 		assert!((y_axis.length() - 1.0).abs() < 1e-4, "{y_axis:?}");
-		assert!(x_axis.dot(y_axis).abs() < 1e-4, "the axes stayed perpendicular");
+		assert!(
+			x_axis.dot(y_axis).abs() < 1e-4,
+			"the axes stayed perpendicular"
+		);
 	}
 }

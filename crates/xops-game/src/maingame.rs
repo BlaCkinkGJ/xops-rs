@@ -24,15 +24,15 @@
 use xops_platform::input::Input;
 
 use crate::collision::get_2d_line_in_box;
-use crate::config::{Config, ControlKey, MAX_PLAYERNAME, TOTAL_ControlKey};
+use crate::config::{Config, ControlKey, TOTAL_ControlKey, MAX_PLAYERNAME};
 use crate::core::{
 	angle_normalization, degree_to_radian, GAMEFPS, GAMENAME, GAMEVERSION, MAX_PATH,
 	TOTAL_HAVEWEAPON,
 };
 use crate::d3dgraphics::{D3DGraphics, MAX_TEXTURE};
 use crate::datafile::{
-	blockdataface, get_file_directory, MAX_ADDSMALLOBJECT, MAX_BLOCKS, MAX_POINTS,
-	MAX_POINTMESSAGEBYTE, POINT_P1TYPE_AIPATH, POINT_P1TYPE_HUMAN, POINT_P1TYPE_HUMAN2,
+	blockdataface, get_file_directory, MAX_ADDSMALLOBJECT, MAX_BLOCKS, MAX_POINTMESSAGEBYTE,
+	MAX_POINTS, POINT_P1TYPE_AIPATH, POINT_P1TYPE_HUMAN, POINT_P1TYPE_HUMAN2,
 	POINT_P1TYPE_HUMANINFO, POINT_P1TYPE_RAND_AIPATH, POINT_P1TYPE_RAND_WEAPON,
 	POINT_P1TYPE_SMALLOBJ, POINT_P1TYPE_WEAPON, TOTAL_BLOCKTEXTURE,
 };
@@ -41,8 +41,8 @@ use crate::event::{EventParameter, DISTANCE_CHECKPOINT};
 use crate::gamemain::{
 	huda_weapon_posx, huda_weapon_posy, ConsoleData, GameInfo, World, CONSOLE_PROMPT,
 	HUDA_WEAPON_SIZEH, HUDA_WEAPON_SIZEW, INPUT_ARROWKEYS_ANGLE, INPUT_F1NUMKEYS_ANGLE,
-	MAX_CONSOLELEN, MAX_CONSOLELINES, TOTAL_EVENTENT_SHOWMESSEC, TOTAL_EVENTENTRYPOINT_0,
-	TOTAL_EVENTENTRYPOINT_1, TOTAL_EVENTENTRYPOINT_2, TOTAL_EVENTLINE, VIEW_DIST,
+	MAX_CONSOLELEN, MAX_CONSOLELINES, TOTAL_EVENTENTRYPOINT_0, TOTAL_EVENTENTRYPOINT_1,
+	TOTAL_EVENTENTRYPOINT_2, TOTAL_EVENTENT_SHOWMESSEC, TOTAL_EVENTLINE, VIEW_DIST,
 	VIEW_F1MODE_ANGLE, VIEW_F1MODE_DIST, VIEW_FREECAMERA_SCALE, VIEW_HEIGHT,
 };
 use crate::gui_object::TextBoxObject;
@@ -62,8 +62,8 @@ use crate::parameter::{
 };
 use crate::resource::MAX_LOADHUMANTEXTURE;
 use crate::scene::D3Dscene;
-use crate::sound::MAX_LOADSOUND;
 use crate::sound::SoundControl;
+use crate::sound::MAX_LOADSOUND;
 use crate::soundmanager::{SoundManager, MAX_SOUNDMGR_LIST};
 use crate::statemachine::StateMachine;
 use crate::window::{get_fps, get_time_ms, get_time_name, WindowControl};
@@ -98,7 +98,10 @@ const HUDA_WEAPON_EDGE_LAST: u8 = 0xB2;
 
 /// The length the upstream `strlen` would see: everything before the first NUL.
 fn c_str_len(bytes: &[u8]) -> usize {
-	bytes.iter().position(|&byte| byte == 0).unwrap_or(bytes.len())
+	bytes
+		.iter()
+		.position(|&byte| byte == 0)
+		.unwrap_or(bytes.len())
 }
 
 /// `strcpy` into a fixed C buffer. Upstream overruns the buffer here, so the copy stops at
@@ -363,7 +366,10 @@ impl<'a> MainGame<'a> {
 	/// Upstream reads whatever the caller's record held there, which is uninitialised
 	/// stack, and the only ids that reach this come from a human's scope mode.
 	fn scope_param(&self, id: i32) -> ScopeParameter {
-		self.world.param.get_scope_param(id).unwrap_or(SCOPE_PARAMETER_0)
+		self.world
+			.param
+			.get_scope_param(id)
+			.unwrap_or(SCOPE_PARAMETER_0)
 	}
 
 	/// `GameParamInfo.GetWeapon`, with an id the weapon table refuses answered by the first
@@ -523,14 +529,7 @@ impl<'a> MainGame<'a> {
 					.map(|p| p.to_vec())
 					.unwrap_or_default();
 
-				resource.load_add_small_object(
-					d3dg,
-					sound_ctrl,
-					i,
-					&model,
-					&texture,
-					&soundpath,
-				);
+				resource.load_add_small_object(d3dg, sound_ctrl, i, &model, &texture, &soundpath);
 			}
 
 			// Load the block data and the point data. Point data is the high bit.
@@ -999,7 +998,11 @@ impl<'a> MainGame<'a> {
 					}
 				} else {
 					for i in 0..MAX_HUMAN {
-						if !self.world.objects.check_zombie_attack(player_id as usize, i) {
+						if !self
+							.world
+							.objects
+							.check_zombie_attack(player_id as usize, i)
+						{
 							continue;
 						}
 						self.world.objects.hit_zombie_attack(
@@ -1105,9 +1108,12 @@ impl<'a> MainGame<'a> {
 					} else {
 						id_param += 1;
 					}
-					self.world
-						.objects
-						.cheat_new_weapon(player_id, id_param, d3dg, self.world.resource);
+					self.world.objects.cheat_new_weapon(
+						player_id,
+						id_param,
+						d3dg,
+						self.world.resource,
+					);
 				}
 				if input_ctrl.check_key_down(originalkeycode_to_dinputdef(0x03)) {
 					let mut id_param = self.weapon_type_no();
@@ -1116,9 +1122,12 @@ impl<'a> MainGame<'a> {
 					} else {
 						id_param -= 1;
 					}
-					self.world
-						.objects
-						.cheat_new_weapon(player_id, id_param, d3dg, self.world.resource);
+					self.world.objects.cheat_new_weapon(
+						player_id,
+						id_param,
+						d3dg,
+						self.world.resource,
+					);
 				}
 			}
 		}
@@ -1389,14 +1398,7 @@ impl<'a> MainGame<'a> {
 					continue;
 				}
 				ai[i].process(
-					objects,
-					block_data,
-					point_data,
-					collision,
-					sound,
-					d3dg,
-					resource,
-					config,
+					objects, block_data, point_data, collision, sound, d3dg, resource, config,
 				);
 			}
 		}
@@ -1452,7 +1454,8 @@ impl<'a> MainGame<'a> {
 			}
 		}
 
-		if self.message_id != -1 && self.message_cnt < (TOTAL_EVENTENT_SHOWMESSEC * GAMEFPS) as i32 {
+		if self.message_id != -1 && self.message_cnt < (TOTAL_EVENTENT_SHOWMESSEC * GAMEFPS) as i32
+		{
 			self.message_cnt += 1;
 		} else {
 			self.message_id = -1;
@@ -1461,11 +1464,8 @@ impl<'a> MainGame<'a> {
 		self.time_process_event = get_time_ms() as i32 - self.time;
 
 		// The camera work.
-		let Some((human_x, human_y, human_z, dead, dead_motion)) = self
-			.world
-			.objects
-			.get_player_human_object()
-			.map(|human| {
+		let Some((human_x, human_y, human_z, dead, dead_motion)) =
+			self.world.objects.get_player_human_object().map(|human| {
 				let (x, y, z, _) = human.pos_data();
 				(x, y, z, human.dead_flag(), human.dead_motion_flag())
 			})
@@ -1487,7 +1487,9 @@ impl<'a> MainGame<'a> {
 
 		// The console's main process, while it is up and the mission is still running.
 		if self.show_console && self.end_framecnt == 0 {
-			self.process_console(state, log, d3dg, config, sound, sound_ctrl, window, input_ctrl, input);
+			self.process_console(
+				state, log, d3dg, config, sound, sound_ctrl, window, input_ctrl, input,
+			);
 		}
 
 		self.base.scene.framecnt = self.base.scene.framecnt.wrapping_add(1);
@@ -1551,8 +1553,7 @@ impl<'a> MainGame<'a> {
 			// first block between the two.
 			let crx = self.base.camera_rx * 0.8
 				+ (self.view_rx + self.mouse_rx * -1.0 + std::f32::consts::PI / 2.0) * 0.2;
-			let mut cry = self.base.camera_ry * 0.8
-				+ (self.view_ry + self.mouse_ry) * 0.2
+			let mut cry = self.base.camera_ry * 0.8 + (self.view_ry + self.mouse_ry) * 0.2
 				- std::f32::consts::PI / 2.0;
 			let ccx = human_x - crx.cos() * cry.cos() * 3.0;
 			let ccy = human_y + HUMAN_HEIGHT - 0.5 + (-cry).sin() * 2.5;
@@ -2066,7 +2067,12 @@ impl<'a> MainGame<'a> {
 			self.draw_huda_edge(d3dg, layout.weapon_x, layout.weapon_y, &edge);
 			huda_next_row(&mut edge);
 			for i in 1..HUDA_WEAPON_SIZEH - 1 {
-				self.draw_huda_edge(d3dg, layout.weapon_x, layout.weapon_y + HUDA_CELL * i, &edge);
+				self.draw_huda_edge(
+					d3dg,
+					layout.weapon_x,
+					layout.weapon_y + HUDA_CELL * i,
+					&edge,
+				);
 			}
 			huda_next_row(&mut edge);
 			self.draw_huda_edge(
@@ -2114,7 +2120,14 @@ impl<'a> MainGame<'a> {
 				18,
 				24,
 			);
-			d3dg.draw_2d_texture_font_text(state_word_x, layout.state_y, state_word, statecolor, 18, 24);
+			d3dg.draw_2d_texture_font_text(
+				state_word_x,
+				layout.state_y,
+				state_word,
+				statecolor,
+				18,
+				24,
+			);
 
 			// The weapon name, shrunk when it is longer than the panel's label width.
 			let (w, h) = D3DGraphics::get_font_text_size(&weaponname, 16, 20, 14);
@@ -2161,7 +2174,8 @@ impl<'a> MainGame<'a> {
 		}
 
 		// The event message, which fades in and out at the ends of its five seconds.
-		if self.message_id != -1 && self.message_cnt < (TOTAL_EVENTENT_SHOWMESSEC * GAMEFPS) as i32 {
+		if self.message_id != -1 && self.message_cnt < (TOTAL_EVENTENT_SHOWMESSEC * GAMEFPS) as i32
+		{
 			let mut messtr = [0u8; MAX_POINTMESSAGEBYTE];
 			if let Some(text) = self.world.point_data.get_message_text(self.message_id) {
 				messtr.copy_from_slice(text);
@@ -2275,7 +2289,14 @@ impl<'a> MainGame<'a> {
 							32,
 							32,
 						);
-						d3dg.draw_2d_texture_font_text_center(error_range, cy - 16, &[0xBE], half, 32, 32);
+						d3dg.draw_2d_texture_font_text_center(
+							error_range,
+							cy - 16,
+							&[0xBE],
+							half,
+							32,
+							32,
+						);
 					}
 				}
 			}
@@ -2535,7 +2556,13 @@ impl<'a> MainGame<'a> {
 			D3DGraphics::get_color_code(0.0, 0.0, 0.0, 0.6),
 		);
 		let green = D3DGraphics::get_color_code(0.0, 0.8, 0.0, 1.0);
-		d3dg.draw_2d_line(radar_pos_x, radar_pos_y, radar_pos_x + radar_size, radar_pos_y, green);
+		d3dg.draw_2d_line(
+			radar_pos_x,
+			radar_pos_y,
+			radar_pos_x + radar_size,
+			radar_pos_y,
+			green,
+		);
 		d3dg.draw_2d_line(
 			radar_pos_x + radar_size,
 			radar_pos_y,
@@ -2550,7 +2577,13 @@ impl<'a> MainGame<'a> {
 			radar_pos_y + radar_size,
 			green,
 		);
-		d3dg.draw_2d_line(radar_pos_x, radar_pos_y + radar_size, radar_pos_x, radar_pos_y, green);
+		d3dg.draw_2d_line(
+			radar_pos_x,
+			radar_pos_y + radar_size,
+			radar_pos_x,
+			radar_pos_y,
+			green,
+		);
 
 		// The map: the faces that are neither the ground nor a step.
 		let grey = D3DGraphics::get_color_code(0.8, 0.8, 0.8, 1.0);
@@ -2626,7 +2659,11 @@ impl<'a> MainGame<'a> {
 		if !self.event_stop {
 			for i in 0..TOTAL_EVENTLINE {
 				let p4 = self.world.events[i].get_next_p4();
-				let Some(mut data) = self.world.point_data.search_pointdata(0x08, 0, 0, 0, p4, 0).1
+				let Some(mut data) = self
+					.world
+					.point_data
+					.search_pointdata(0x08, 0, 0, 0, p4, 0)
+					.1
 				else {
 					continue;
 				};
@@ -2945,11 +2982,18 @@ impl<'a> MainGame<'a> {
 		if self.command_is(b"event") {
 			for i in 0..TOTAL_EVENTLINE {
 				let p4 = self.world.events[i].get_next_p4();
-				let found = self.world.point_data.search_pointdata(0x08, 0, 0, 0, p4, 0).1;
+				let found = self
+					.world
+					.point_data
+					.search_pointdata(0x08, 0, 0, 0, p4, 0)
+					.1;
 				let line = match found {
 					None => format!("Event {i}   No task."),
 					Some(data) => {
-						format!("Event {i}   [{}][{}][{}][{}]", data.p1, data.p2, data.p3, data.p4)
+						format!(
+							"Event {i}   [{}][{}][{}][{}]",
+							data.p1, data.p2, data.p3, data.p4
+						)
 					}
 				};
 				self.add_info_console(white, line.as_bytes());
@@ -2960,7 +3004,11 @@ impl<'a> MainGame<'a> {
 		if let Some(id) = self.get_command_num(b"skip") {
 			if (0..TOTAL_EVENTLINE as i32).contains(&id) {
 				let p4 = self.world.events[id as usize].get_next_p4();
-				let found = self.world.point_data.search_pointdata(0x08, 0, 0, 0, p4, 0).1;
+				let found = self
+					.world
+					.point_data
+					.search_pointdata(0x08, 0, 0, 0, p4, 0)
+					.1;
 				match found {
 					None => {
 						let line = format!("Event {id}   No task.");
@@ -3080,10 +3128,7 @@ impl<'a> MainGame<'a> {
 			self.add_info_console(white, header.as_bytes());
 
 			let mifpath = self.world.game_info.mifpath;
-			let line = console_line(&[
-				b"MIFpath : ",
-				clipped(&mifpath, MAX_CONSOLELEN - 10 - 1),
-			]);
+			let line = console_line(&[b"MIFpath : ", clipped(&mifpath, MAX_CONSOLELEN - 10 - 1)]);
 			self.add_info_console(white, &line);
 
 			let name = if filetype {
@@ -3324,10 +3369,8 @@ impl<'a> MainGame<'a> {
 				"InvalidPoints : {}",
 				total_points
 					- (human_points
-						+ weapon_points
-						+ object_points
-						+ humaninfo_points
-						+ path_points
+						+ weapon_points + object_points
+						+ humaninfo_points + path_points
 						+ event_points)
 			);
 			self.add_info_console(white, line.as_bytes());
@@ -3970,7 +4013,9 @@ impl<'a> MainGame<'a> {
 		if self.command_is(b"window") {
 			let flag = !d3dg.get_fullscreen_flag();
 
-			if self.change_window_mode(d3dg, window, input_ctrl, input, config, sound_ctrl, flag) != 0 {
+			if self.change_window_mode(d3dg, window, input_ctrl, input, config, sound_ctrl, flag)
+				!= 0
+			{
 				self.add_info_console(white, b"[Error] Change failed.");
 			} else if flag {
 				self.add_info_console(white, b"Changed FullScreen mode.");
@@ -3989,7 +4034,10 @@ impl<'a> MainGame<'a> {
 
 			let path = crate::datafile::path_from_bytes(&fname);
 			if d3dg.save_screenshot(&path) {
-				let line = format!("Saved Screenshot  (File:{})", String::from_utf8_lossy(&fname));
+				let line = format!(
+					"Saved Screenshot  (File:{})",
+					String::from_utf8_lossy(&fname)
+				);
 				self.add_info_console(white, line.as_bytes());
 			} else {
 				self.add_info_console(white, b"[Error] Save failed.");
@@ -4089,8 +4137,8 @@ mod tests {
 	use super::*;
 	use crate::resource::ResourceManager;
 	use xops_platform::gfx::Gfx;
-	use xops_platform::winit::event::{ElementState, WindowEvent};
 	use xops_platform::wgpu;
+	use xops_platform::winit::event::{ElementState, WindowEvent};
 
 	/// A 640x480 renderer, which is the size every number below is worked out at.
 	fn headless() -> D3DGraphics {
@@ -4127,14 +4175,19 @@ mod tests {
 	/// test build's door into the table, and it takes the retrieval keycode the game asks
 	/// the config for.
 	fn press(input_ctrl: &mut InputControl, config: &Config, key: ControlKey) {
-		input_ctrl.set_key_state(originalkeycode_to_dinputdef(config.get_keycode(key as i32)), true);
+		input_ctrl.set_key_state(
+			originalkeycode_to_dinputdef(config.get_keycode(key as i32)),
+			true,
+		);
 	}
 
 	/// Releases it again, on the frame after the one it was held down on.
 	fn release(input_ctrl: &mut InputControl, config: &Config, key: ControlKey) {
 		input_ctrl.advance_frame();
-		input_ctrl
-			.set_key_state(originalkeycode_to_dinputdef(config.get_keycode(key as i32)), false);
+		input_ctrl.set_key_state(
+			originalkeycode_to_dinputdef(config.get_keycode(key as i32)),
+			false,
+		);
 	}
 
 	/// Steps to the next frame, which turns what was held into the previous frame's table.
@@ -4266,9 +4319,15 @@ mod tests {
 
 		close(screen.base.camera_rx, degree_to_radian(1.0));
 		close(screen.base.camera_ry, degree_to_radian(-89.0) * 0.05);
-		close(screen.base.camera_x, 10.0 + degree_to_radian(1.0).cos() * 3.12);
+		close(
+			screen.base.camera_x,
+			10.0 + degree_to_radian(1.0).cos() * 3.12,
+		);
 		close(screen.base.camera_y, 38.3);
-		close(screen.base.camera_z, -3.0 + degree_to_radian(1.0).sin() * 3.12);
+		close(
+			screen.base.camera_z,
+			-3.0 + degree_to_radian(1.0).sin() * 3.12,
+		);
 	}
 
 	/// While the death motion plays the camera holds where it is, and the free camera does
@@ -4581,7 +4640,10 @@ mod tests {
 		// The line was echoed to the console behind its prompt.
 		assert_eq!(&screen.info_console_data[0].textdata[..6], b">radar");
 		// And the box was emptied for the next one.
-		assert!(screen.console_text_box_control.get_text_box_str().is_empty());
+		assert!(screen
+			.console_text_box_control
+			.get_text_box_str()
+			.is_empty());
 	}
 
 	// --- the radar ----------------------------------------------------------
@@ -4705,5 +4767,4 @@ mod tests {
 		}
 		assert_eq!(ammo, vec![0xBB, b'3', b' ', 0xBA, b'1', b'2']);
 	}
-
 }

@@ -156,7 +156,10 @@ impl DebugLog {
 			return true;
 		};
 
-		if fp.write_all(&log_line(tag, title, text, get_time_ms())).is_err() {
+		if fp
+			.write_all(&log_line(tag, title, text, get_time_ms()))
+			.is_err()
+		{
 			return true;
 		}
 
@@ -308,7 +311,9 @@ mod tests {
 	}
 
 	fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-		haystack.windows(needle.len()).any(|window| window == needle)
+		haystack
+			.windows(needle.len())
+			.any(|window| window == needle)
 	}
 
 	fn index_of(haystack: &[u8], needle: &[u8]) -> usize {
@@ -330,7 +335,10 @@ mod tests {
 
 	#[test]
 	fn the_constructor_names_the_file_from_the_clock() {
-		let name = DebugLog::new().get_log_name().to_string_lossy().into_owned();
+		let name = DebugLog::new()
+			.get_log_name()
+			.to_string_lossy()
+			.into_owned();
 
 		assert!(name.starts_with("OpenXOPS_log-"));
 		assert!(name.ends_with(".html"));
@@ -368,7 +376,11 @@ mod tests {
 		assert!(text.contains("<b>OpenXOPS 1.080 Debug Log</b><br>\n"));
 		let stamp_at = index_of(&file, b"Date and time : ") + "Date and time : ".len();
 		let stamp = &file[stamp_at..stamp_at + 19];
-		assert!(stamp.starts_with(b"2"), "{}", String::from_utf8_lossy(stamp));
+		assert!(
+			stamp.starts_with(b"2"),
+			"{}",
+			String::from_utf8_lossy(stamp)
+		);
 		assert!(stamp[4] == b'-' && stamp[7] == b'-' && stamp[10] == b' ');
 		assert!(stamp[13] == b':' && stamp[16] == b':');
 		assert!(stamp

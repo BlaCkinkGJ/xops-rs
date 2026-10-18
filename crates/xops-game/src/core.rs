@@ -202,10 +202,7 @@ pub fn get_4byte_little_endian(data: &[u8]) -> u32 {
 	if data.len() < 4 {
 		return 0;
 	}
-	((data[3] as u32) << 24)
-		+ ((data[2] as u32) << 16)
-		+ ((data[1] as u32) << 8)
-		+ data[0] as u32
+	((data[3] as u32) << 24) + ((data[2] as u32) << 16) + ((data[1] as u32) << 8) + data[0] as u32
 }
 
 pub fn get_2byte_big_endian(data: &[u8]) -> u32 {
@@ -219,10 +216,7 @@ pub fn get_4byte_big_endian(data: &[u8]) -> u32 {
 	if data.len() < 4 {
 		return 0;
 	}
-	((data[0] as u32) << 24)
-		+ ((data[1] as u32) << 16)
-		+ ((data[2] as u32) << 8)
-		+ data[3] as u32
+	((data[0] as u32) << 24) + ((data[1] as u32) << 16) + ((data[2] as u32) << 8) + data[3] as u32
 }
 
 #[cfg(test)]

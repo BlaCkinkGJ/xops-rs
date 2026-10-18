@@ -22,8 +22,8 @@
 //! and for a human it sets a refresh flag and asks again every frame.
 
 use crate::core::ENABLE_BUG_HUMANWEAPON;
-use crate::datafile::{path_from_bytes, MAX_ADDSMALLOBJECT};
 use crate::d3dgraphics::D3DGraphics;
+use crate::datafile::{path_from_bytes, MAX_ADDSMALLOBJECT};
 use crate::parameter::{
 	ParameterInfo, TOTAL_PARAMETERINFO_BULLET, TOTAL_PARAMETERINFO_HUMAN,
 	TOTAL_PARAMETERINFO_SMALLOBJECT, TOTAL_PARAMETERINFO_WEAPON,
@@ -221,16 +221,26 @@ impl ResourceManager {
 		// neighbours, and the last one wraps back to the first, which is what makes a
 		// walk loop without a jump at the seam. The copy branch beside it in the upstream
 		// is the disabled build and is not carried over.
-		self.human_walkmodel[1] = d3dg.morphing_model(self.human_walkmodel[0], self.human_walkmodel[2]);
-		self.human_walkmodel[3] = d3dg.morphing_model(self.human_walkmodel[2], self.human_walkmodel[4]);
-		self.human_walkmodel[5] = d3dg.morphing_model(self.human_walkmodel[4], self.human_walkmodel[6]);
-		self.human_walkmodel[7] = d3dg.morphing_model(self.human_walkmodel[6], self.human_walkmodel[0]);
-		self.human_runmodel[1] = d3dg.morphing_model(self.human_runmodel[0], self.human_runmodel[2]);
-		self.human_runmodel[3] = d3dg.morphing_model(self.human_runmodel[2], self.human_runmodel[4]);
-		self.human_runmodel[5] = d3dg.morphing_model(self.human_runmodel[4], self.human_runmodel[6]);
-		self.human_runmodel[7] = d3dg.morphing_model(self.human_runmodel[6], self.human_runmodel[8]);
-		self.human_runmodel[9] = d3dg.morphing_model(self.human_runmodel[8], self.human_runmodel[10]);
-		self.human_runmodel[11] = d3dg.morphing_model(self.human_runmodel[10], self.human_runmodel[0]);
+		self.human_walkmodel[1] =
+			d3dg.morphing_model(self.human_walkmodel[0], self.human_walkmodel[2]);
+		self.human_walkmodel[3] =
+			d3dg.morphing_model(self.human_walkmodel[2], self.human_walkmodel[4]);
+		self.human_walkmodel[5] =
+			d3dg.morphing_model(self.human_walkmodel[4], self.human_walkmodel[6]);
+		self.human_walkmodel[7] =
+			d3dg.morphing_model(self.human_walkmodel[6], self.human_walkmodel[0]);
+		self.human_runmodel[1] =
+			d3dg.morphing_model(self.human_runmodel[0], self.human_runmodel[2]);
+		self.human_runmodel[3] =
+			d3dg.morphing_model(self.human_runmodel[2], self.human_runmodel[4]);
+		self.human_runmodel[5] =
+			d3dg.morphing_model(self.human_runmodel[4], self.human_runmodel[6]);
+		self.human_runmodel[7] =
+			d3dg.morphing_model(self.human_runmodel[6], self.human_runmodel[8]);
+		self.human_runmodel[9] =
+			d3dg.morphing_model(self.human_runmodel[8], self.human_runmodel[10]);
+		self.human_runmodel[11] =
+			d3dg.morphing_model(self.human_runmodel[10], self.human_runmodel[0]);
 
 		0
 	}
@@ -370,7 +380,10 @@ impl ResourceManager {
 		}
 
 		let slot = dataid as usize;
-		Some((self.human_texture_param[slot], self.human_texture_d3dg[slot]))
+		Some((
+			self.human_texture_param[slot],
+			self.human_texture_d3dg[slot],
+		))
 	}
 
 	/// Releases all human textures at once. Upstream `CleanupHumanTexture`.
@@ -429,7 +442,10 @@ impl ResourceManager {
 			return None;
 		}
 
-		Some((self.weapon_model[id as usize], self.weapon_texture[id as usize]))
+		Some((
+			self.weapon_model[id as usize],
+			self.weapon_texture[id as usize],
+		))
 	}
 
 	/// Gets the model and texture of a bug weapon. Upstream `GetBugWeaponModelTexture`.
@@ -751,7 +767,10 @@ impl ResourceManager {
 			return None;
 		}
 
-		Some((self.bullet_model[id as usize], self.bullet_texture[id as usize]))
+		Some((
+			self.bullet_model[id as usize],
+			self.bullet_texture[id as usize],
+		))
 	}
 
 	/// Releases the bullet models and textures. Upstream `CleanupBulletModelTexture`.
@@ -991,10 +1010,11 @@ mod tests {
 
 	/// The renderer's own test helper, copied: no window and no surface.
 	fn headless() -> D3DGraphics {
-		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
-			backends: xops_platform::wgpu::Backends::all(),
-			..Default::default()
-		});
+		let instance =
+			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+				backends: xops_platform::wgpu::Backends::all(),
+				..Default::default()
+			});
 		let gfx = Gfx::new(&instance, None, 64, 48, None).expect("a headless renderer");
 		D3DGraphics::new(gfx, false, 0)
 	}
@@ -1017,7 +1037,10 @@ mod tests {
 		);
 		assert_eq!(resource.get_human_texture_info(0), Some((-1, -1)));
 		assert_eq!(resource.get_human_texture(0), -1);
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 0), Some((-1, -1)));
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 0),
+			Some((-1, -1))
+		);
 		assert_eq!(resource.get_small_object_model_texture(0), Some((-1, -1)));
 		assert_eq!(resource.get_bullet_model_texture(0), Some((-1, -1)));
 		assert_eq!(resource.get_scope_texture(), -1);
@@ -1064,7 +1087,10 @@ mod tests {
 		assert_eq!(resource.get_human_texture_info(1).unwrap().0, second);
 		assert_eq!(resource.get_human_texture_info(2).unwrap().0, third);
 		// There is no slot ten, which is where the debug console's page stops.
-		assert_eq!(resource.get_human_texture_info(MAX_LOADHUMANTEXTURE as i32), None);
+		assert_eq!(
+			resource.get_human_texture_info(MAX_LOADHUMANTEXTURE as i32),
+			None
+		);
 		assert_eq!(resource.get_human_texture_info(-1), None);
 
 		// The human lookup walks the same two arrays, so every human type that names a
@@ -1083,8 +1109,14 @@ mod tests {
 		}
 		// A human type outside the table has no texture.
 		assert_eq!(resource.get_human_texture(-1), -1);
-		assert_eq!(resource.get_human_texture(TOTAL_PARAMETERINFO_HUMAN as i32), -1);
-		assert_eq!(resource.add_human_texture(&mut graphics, TOTAL_PARAMETERINFO_HUMAN as i32), -1);
+		assert_eq!(
+			resource.get_human_texture(TOTAL_PARAMETERINFO_HUMAN as i32),
+			-1
+		);
+		assert_eq!(
+			resource.add_human_texture(&mut graphics, TOTAL_PARAMETERINFO_HUMAN as i32),
+			-1
+		);
 
 		resource.cleanup_human_texture(&mut graphics);
 		assert_eq!(resource.get_human_textures(), 0);
@@ -1114,7 +1146,10 @@ mod tests {
 		// lookup succeeds with the empty ids. That is the behaviour the callers are
 		// written around: the object is added anyway and draws untextured.
 		let dataid = TOTAL_PARAMETERINFO_SMALLOBJECT as i32;
-		assert_eq!(resource.get_small_object_model_texture(dataid), Some((-1, -1)));
+		assert_eq!(
+			resource.get_small_object_model_texture(dataid),
+			Some((-1, -1))
+		);
 		assert_eq!(resource.get_small_object_sound(dataid), -1);
 
 		// Nothing reached the renderer, and cleaning the slot up is a no-op rather than a
@@ -1202,10 +1237,22 @@ mod tests {
 		graphics.set_map_texture_id(2, 12);
 		graphics.set_map_texture_id(8, 18);
 
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 23), Some((-1, 11)));
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 24), Some((-1, 13)));
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 30), Some((-1, 12)));
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 53), Some((-1, 18)));
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 23),
+			Some((-1, 11))
+		);
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 24),
+			Some((-1, 13))
+		);
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 30),
+			Some((-1, 12))
+		);
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 53),
+			Some((-1, 18))
+		);
 
 		// The model half is the first human upper body model, which is empty until the
 		// human models load.
@@ -1215,7 +1262,10 @@ mod tests {
 		// the table is answered from the table.
 		assert_eq!(resource.get_weapon_model_texture(&graphics, 26), None);
 		assert_eq!(resource.get_bug_weapon_model_texture(&graphics, 26), None);
-		assert_eq!(resource.get_weapon_model_texture(&graphics, 22), Some((-1, -1)));
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, 22),
+			Some((-1, -1))
+		);
 		assert_eq!(resource.get_weapon_model_texture(&graphics, -1), None);
 	}
 
@@ -1224,20 +1274,32 @@ mod tests {
 		let graphics = headless();
 		let resource = ResourceManager::new();
 
-		assert_eq!(resource.get_weapon_model_texture(&graphics, TOTAL_PARAMETERINFO_WEAPON as i32 + 3), None);
+		assert_eq!(
+			resource.get_weapon_model_texture(&graphics, TOTAL_PARAMETERINFO_WEAPON as i32 + 3),
+			None
+		);
 		assert_eq!(resource.get_weapon_sound(-2), -1);
-		assert_eq!(resource.get_weapon_sound(TOTAL_PARAMETERINFO_WEAPON as i32), -1);
+		assert_eq!(
+			resource.get_weapon_sound(TOTAL_PARAMETERINFO_WEAPON as i32),
+			-1
+		);
 
 		// The small object tables are one longer than the fixed settings, for the
 		// additional object the mission names.
 		let last = (TOTAL_PARAMETERINFO_SMALLOBJECT + MAX_ADDSMALLOBJECT) as i32 - 1;
-		assert_eq!(resource.get_small_object_model_texture(last), Some((-1, -1)));
+		assert_eq!(
+			resource.get_small_object_model_texture(last),
+			Some((-1, -1))
+		);
 		assert_eq!(resource.get_small_object_model_texture(last + 1), None);
 		assert_eq!(resource.get_small_object_model_texture(-1), None);
 		assert_eq!(resource.get_small_object_sound(last), -1);
 		assert_eq!(resource.get_small_object_sound(last + 1), -1);
 
 		assert_eq!(resource.get_bullet_model_texture(-1), None);
-		assert_eq!(resource.get_bullet_model_texture(TOTAL_PARAMETERINFO_BULLET as i32), None);
+		assert_eq!(
+			resource.get_bullet_model_texture(TOTAL_PARAMETERINFO_BULLET as i32),
+			None
+		);
 	}
 }

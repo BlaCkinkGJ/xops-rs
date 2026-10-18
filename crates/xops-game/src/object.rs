@@ -19,9 +19,8 @@ use crate::parameter::ParameterInfo;
 pub const HUMAN_PROGRESSRUN_ACCELERATION: f32 = 0.7;
 pub const HUMAN_SIDEWAYSRUN_ACCELERATION: f32 = 0.5;
 pub const HUMAN_REGRESSRUN_ACCELERATION: f32 = 0.38;
-pub const HUMAN_PROGRESSRUN_SIDEWAYSRUN_ACCELERATION: f32 = (HUMAN_PROGRESSRUN_ACCELERATION
-	+ HUMAN_SIDEWAYSRUN_ACCELERATION)
-	/ 2.0;
+pub const HUMAN_PROGRESSRUN_SIDEWAYSRUN_ACCELERATION: f32 =
+	(HUMAN_PROGRESSRUN_ACCELERATION + HUMAN_SIDEWAYSRUN_ACCELERATION) / 2.0;
 pub const HUMAN_REGRESSRUN_SIDEWAYSRUN_ACCELERATION: f32 = HUMAN_REGRESSRUN_ACCELERATION;
 pub const HUMAN_PROGRESSWALK_ACCELERATION: f32 = 0.35;
 pub const HUMAN_ATTENUATION: f32 = 0.5;
@@ -121,7 +120,15 @@ pub struct Object {
 }
 
 impl Object {
-	pub fn new(param: ParameterInfo, x: f32, y: f32, z: f32, rx: f32, size: f32, flag: bool) -> Object {
+	pub fn new(
+		param: ParameterInfo,
+		x: f32,
+		y: f32,
+		z: f32,
+		rx: f32,
+		size: f32,
+		flag: bool,
+	) -> Object {
 		Object {
 			param,
 			pos_x: x,
@@ -194,8 +201,21 @@ impl Object {
 		if !self.enable_flag {
 			return;
 		}
-		d3dg.set_world_transform(self.pos_x, self.pos_y, self.pos_z, self.rotation_x, 0.0, self.model_size);
-		d3dg.render_model(self.id_model, self.id_texture, self.dark_model_flag, false, nomodel);
+		d3dg.set_world_transform(
+			self.pos_x,
+			self.pos_y,
+			self.pos_z,
+			self.rotation_x,
+			0.0,
+			self.model_size,
+		);
+		d3dg.render_model(
+			self.id_model,
+			self.id_texture,
+			self.dark_model_flag,
+			false,
+			nomodel,
+		);
 	}
 }
 
