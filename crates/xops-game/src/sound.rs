@@ -263,8 +263,8 @@ impl SoundControl {
 		(max_volume as f32 / max_dist as f32 * dist * -1.0 + max_volume as f32) as i32
 	}
 
-	/// The master volume folded into the device's scale, the expression inlined in
-	/// `sound-ezds.cpp:236` and again in the browser port (`port/sound-sdl2.cpp:279`).
+	/// The master volume folded into the device's scale, the expression inlined at
+	/// `sound-ezds.cpp:236`.
 	///
 	/// `volume` is the caller's -100 to 100 and the result is what reaches the mixer. A
 	/// separate function only so that it can be checked without a device.
