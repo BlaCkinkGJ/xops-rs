@@ -234,20 +234,47 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// `about_to_wait` again. That is an endless loop around the event loop, burning a
 		// core and running hundreds of thousands of times a second while the game's frames
 		// themselves are paced by the wait below.
+		// A frame for the display without waiting for the step to end, for the runs that do
+		// not blend: one frame per step, and nothing in between.
+		//
+		// This is the present the game used to do at the end of its own step. It is here
+		// rather than there because the host draws the frames, so the step must not: one
+		// render of a frame is wanted, not two, and the second one only costs the GPU a
+		// pass that nobody sees.
+		if !self.interpolating && due > 0 {
+			// One frame per step, the game's own, with nothing blended between them: the
+			// original's look. It waits for a step, because the loop is woken by other
+			// things than the step -- a mouse movement, the system -- and showing the same
+			// frame again on each of those wakes is a render the display never needs.
+			//
+			// The host shows it, because the game's own end of frame no longer draws one;
+			// see `Gfx::set_host_presents`.
+			let taken = Instant::now();
+			let blended = self.app.present_between(0.0);
+			trace::present_cost(taken.elapsed().as_secs_f64() * 1000.0);
+			trace::presented_at(0.0);
+			if !blended {
+				trace::presented_unblended();
+			}
+		}
+
 		// The frames the display is given between this step and the next.
 		//
-		// A display wants a frame every 16.7 ms and the game makes one every 30, and 30 is not
-		// a multiple of 16.7: without this the display is given one frame for a refresh here
-		// and two there, and that unevenness is what reads as a low frame rate even when the
-		// game is keeping up. Each of these frames is the game's own last frame drawn partway
-		// to the one before it, so nothing is simulated twice and the game keeps its own speed.
+		// A display wants a frame every 16.7 ms and the game makes one every 30, and 30 is
+		// not a multiple of 16.7: without this the display is given one frame for a refresh
+		// here and two there, and that unevenness is what reads as a low frame rate even
+		// when the game is keeping up. Each of these frames is the game's own last frame
+		// drawn partway to the one before it, so nothing is simulated twice and the game
+		// keeps its own speed.
 		//
-		// Paced with the small sleep rather than with the event loop's timer, which is the one
-		// thing about this that had to be measured: a wait of one refresh handed to the event
-		// loop comes back after twenty or thirty milliseconds here, so half the refreshes would
-		// go by with nothing new on them. The sleep below re-reads the clock between short
-		// sleeps and therefore keeps time. The surface is a mailbox, so the display takes the
-		// newest frame at each of its own refreshes and drops the rest.
+		// Paced with the small sleep rather than with the event loop's timer, which is the
+		// one thing about this that had to be measured: a wait of one refresh handed to the
+		// event loop comes back after twenty or thirty milliseconds here, so half the
+		// refreshes would go by with nothing new on them.
+		//
+		// The present is made to do its drawing before it takes a display buffer, which is
+		// worth about a third of the frames: see `Gfx::encode`. Taking one waits for the
+		// display, and the wait is most of what a presented frame costs.
 		if self.interpolating {
 			let refresh = self.refresh();
 			loop {
@@ -256,10 +283,11 @@ impl<A: App> ApplicationHandler for Host<A> {
 					break;
 				}
 				let t = self.interpolation();
-				if self.app.present_between(t) {
-					trace::presented_at(t);
-				} else {
-					trace::presented_at(t);
+				let taken = Instant::now();
+				let blended = self.app.present_between(t);
+				trace::present_cost(taken.elapsed().as_secs_f64() * 1000.0);
+				trace::presented_at(t);
+				if !blended {
 					trace::presented_unblended();
 				}
 				crate::host::sleep_until((now + refresh).min(self.next_frame));

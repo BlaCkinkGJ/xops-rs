@@ -79,6 +79,11 @@ struct Counters {
 	present_t_mean: f64,
 	present_t_max: f64,
 	present_t_duplicates: u64,
+	present_cost_n: u64,
+	present_cost_sum_ms: f64,
+	present_cost_max_ms: f64,
+	acquire_sum_ms: f64,
+	acquire_max_ms: f64,
 	screen: &'static str,
 	looking: bool,
 	aim_x: f32,
@@ -110,6 +115,17 @@ static PRESENT_GAP_MAX_MS: AtomicU64 = AtomicU64::new(0);
 static PRESENT_GAP_MIN_MS: AtomicU64 = AtomicU64::new(0);
 static PRESENT_GAPS: AtomicU64 = AtomicU64::new(0);
 static PRESENT_DUPLICATES: AtomicU64 = AtomicU64::new(0);
+/// What a presented frame costs on the calling thread. A present that costs a refresh or
+/// more cannot be given one per refresh, so this is the number that says whether the
+/// display is not being fed because the frame is too expensive or because the pacing is
+/// wrong.
+static PRESENT_COST_MS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_COST_MAX_MS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_COSTS: AtomicU64 = AtomicU64::new(0);
+/// How long the wait for a free display buffer was, which is the part of a presented
+/// frame that the display owns rather than the game.
+static ACQUIRE_MS: AtomicU64 = AtomicU64::new(0);
+static ACQUIRE_MAX_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_PRESENT_AT: AtomicU64 = AtomicU64::new(0);
 /// The interpolation factor at each present, summed and counted, so that a factor that is
 /// stuck at one end or repeating is visible.
@@ -247,6 +263,25 @@ pub fn presented_at(t: f32) {
 	}
 }
 
+/// What one presented frame cost, around the call that presents it.
+pub fn present_cost(millis: f64) {
+	if !enabled() {
+		return;
+	}
+	PRESENT_COSTS.fetch_add(1, Ordering::Relaxed);
+	store(&PRESENT_COST_MS, load(&PRESENT_COST_MS) + millis);
+	store(&PRESENT_COST_MAX_MS, load(&PRESENT_COST_MAX_MS).max(millis));
+}
+
+/// The wait for a display buffer, around the call that takes one.
+pub fn acquire_cost(millis: f64) {
+	if !enabled() {
+		return;
+	}
+	store(&ACQUIRE_MS, load(&ACQUIRE_MS) + millis);
+	store(&ACQUIRE_MAX_MS, load(&ACQUIRE_MAX_MS).max(millis));
+}
+
 /// A frame drawn for the display again without being blended, which is the fallback: the
 /// frame did not line up with the one before it.
 pub fn presented_unblended() {
@@ -332,6 +367,11 @@ fn take() -> Counters {
 		unmatched_draws: UNMATCHED_DRAWS.swap(0, Ordering::Relaxed),
 		shear_worst: load(&SHEAR_WORST),
 		present_gaps: PRESENT_GAPS.swap(0, Ordering::Relaxed),
+		present_cost_n: PRESENT_COSTS.swap(0, Ordering::Relaxed),
+		present_cost_sum_ms: f64::from_bits(PRESENT_COST_MS.swap(0, Ordering::Relaxed)),
+		present_cost_max_ms: f64::from_bits(PRESENT_COST_MAX_MS.swap(0, Ordering::Relaxed)),
+		acquire_sum_ms: f64::from_bits(ACQUIRE_MS.swap(0, Ordering::Relaxed)),
+		acquire_max_ms: f64::from_bits(ACQUIRE_MAX_MS.swap(0, Ordering::Relaxed)),
 		present_gap_mean_ms: load(&PRESENT_GAP_MS),
 		present_gap_min_ms: load(&PRESENT_GAP_MIN_MS),
 		present_gap_max_ms: load(&PRESENT_GAP_MAX_MS),
@@ -471,6 +511,19 @@ pub fn report() {
 			counters.present_t_mean,
 			counters.present_t_max,
 			counters.present_t_duplicates,
+		);
+	}
+	if counters.present_cost_n > 0 {
+		eprintln!(
+			"xops:   present cost: mean {:.2}ms max {:.2}ms over {}",
+			counters.present_cost_sum_ms / counters.present_cost_n as f64,
+			counters.present_cost_max_ms,
+			counters.present_cost_n,
+		);
+		eprintln!(
+			"xops:   of which waiting for a display buffer: mean {:.2}ms max {:.2}ms",
+			counters.acquire_sum_ms / counters.present_cost_n as f64,
+			counters.acquire_max_ms,
 		);
 	}
 	if let Some((x, y, distance, size)) = counters.view {

@@ -182,3 +182,16 @@ the two disagree.
   minus one, which draws nothing: shots were fired, hit and counted, and were never seen
   on the way. `ObjectManager::set_class` is called from `init_game` now, where upstream
   calls it.
+- **A presented frame costs whatever the display makes it cost, and on this machine that is
+  about a refresh: the surface is `Fifo`, so taking a display buffer waits for the previous
+  frame to be shown.** That is why the render is *submitted before* the buffer is taken
+  (`Gfx::encode`: `render_colour` then `show_colour`). Drawing into the buffer after taking
+  it leaves the GPU idle through the wait: measured, the same frames 25-31 ms apart instead
+  of 18, and 41 presented frames a second instead of 55.
+- **The game's step must not draw a frame for the display.** The host draws for the display,
+  so `Gfx::set_host_presents` makes the step's own end of frame draw nothing: encoding a
+  second full frame per step is a pass nobody sees. The offscreen mode reads the colour
+  target and therefore leaves it off.
+- **`XOPS_INTERPOLATE=0` still has to show the game's frames**, and only on the wakes that
+  ran a step: the loop is woken by mouse motion and by the system as well, and presenting on
+  each of those wakes is several identical frames a second the display never needs.

@@ -177,6 +177,13 @@ struct State {
 	depth_test: bool,
 	depth_write: bool,
 	cull: bool,
+	/// Whether the host draws the frames for the display itself.
+	///
+	/// When it does, the render the game ends its step with is never shown: the host
+	/// re-draws the recorded frame to blend it with the one before. Encoding it twice
+	/// costs the display a vblank, which is the difference between being fed a frame per
+	/// refresh and one every other refresh. The offscreen mode, which reads the colour
+	/// target rather than showing it, leaves this off.
 	front_face: Enum,
 	fog: bool,
 	fog_colour: [f32; 3],
@@ -235,6 +242,14 @@ impl State {
 }
 
 pub struct Gfx {
+	/// Whether the host draws the frames for the display itself.
+	///
+	/// When it does, the render the game ends its step with is never shown: the host
+	/// re-draws the recorded frame to blend it with the one before. Encoding it twice costs
+	/// the GPU a second full pass, which is the difference between the display being fed a
+	/// frame per refresh and one every other refresh. The offscreen mode, which reads the
+	/// colour target rather than showing it, leaves this off.
+	host_presents: bool,
 	device: wgpu::Device,
 	queue: wgpu::Queue,
 
@@ -507,6 +522,7 @@ impl Gfx {
 		let (colour, colour_view, depth) = create_targets(&device, format, width, height);
 
 		Ok(Gfx {
+			host_presents: false,
 			device,
 			queue,
 			width,
@@ -708,6 +724,11 @@ impl Gfx {
 
 		// Drawn, not shown: the host decides when the display gets a frame, and it may want
 		// one between this step and the next.
+		if self.host_presents {
+			// The host draws it, and drawing it here as well would be a second full render
+			// of the same frame for the GPU to get through before the one that is shown.
+			return Ok(());
+		}
 		self.render_colour()
 	}
 
@@ -799,13 +820,20 @@ impl Gfx {
 	}
 
 	/// Draws the recorded frame into the colour target and shows it.
+	///
+	/// The two are submitted separately, and the render first, on purpose. Taking a display
+	/// buffer waits for the display, and it is the wait that costs: submitting the render
+	/// before it means the GPU draws the frame while the CPU waits for somewhere to put it,
+	/// rather than both standing still. Drawing it after the wait is measurably worse --
+	/// the same frames, twenty-five milliseconds apart instead of seventeen.
 	fn encode(&mut self) -> Result<(), String> {
-		let mut encoder = self
+		self.render_colour()?;
+
+		let encoder = self
 			.device
 			.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-				label: Some("frame"),
+				label: Some("show"),
 			});
-		self.encode_commands(&mut encoder);
 		self.show_colour(encoder)
 	}
 
@@ -974,7 +1002,10 @@ impl Gfx {
 	/// Copies the colour target to the surface and presents it.
 	fn show_colour(&mut self, mut encoder: wgpu::CommandEncoder) -> Result<(), String> {
 		if let (Some(surface), Some(_config)) = (&self.surface, &self.surface_config) {
-			match surface.get_current_texture() {
+			let acquire = std::time::Instant::now();
+			let acquired = surface.get_current_texture();
+			crate::trace::acquire_cost(acquire.elapsed().as_secs_f64() * 1000.0);
+			match acquired {
 				Ok(frame) => {
 					encoder.copy_texture_to_texture(
 						self.colour.as_image_copy(),
@@ -1245,6 +1276,13 @@ impl Gfx {
 	pub fn cull_enabled(&self) -> bool {
 		self.state.cull
 	}
+
+	/// Says that the host draws the frames for the display, so the game's own end of frame
+	/// does not have to.
+	pub fn set_host_presents(&mut self, presents: bool) {
+		self.host_presents = presents;
+	}
+
 
 	pub fn blend_enabled(&self) -> bool {
 		self.state.blend

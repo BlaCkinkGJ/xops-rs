@@ -166,6 +166,13 @@ impl D3DGraphics {
 		&mut self.gfx
 	}
 
+	/// Says that the host draws the frames for the display, so the game's own end of frame
+	/// does not have to. Set by the windowed run, which presents; the offscreen one reads
+	/// the colour target and needs the render.
+	pub fn set_host_presents(&mut self, presents: bool) {
+		self.gfx.set_host_presents(presents);
+	}
+
 	pub fn gfx_ref(&self) -> &Gfx {
 		&self.gfx
 	}

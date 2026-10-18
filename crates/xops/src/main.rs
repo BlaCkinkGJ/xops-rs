@@ -315,7 +315,12 @@ impl App for Shell {
 			window_control,
 			self.mission.as_deref(),
 		) {
-			Ok(game) => self.game = Some(game),
+			Ok(mut game) => {
+				// There is a window, and the host draws the frames the display is given,
+				// so the game's own end of frame does not have to draw one as well.
+				game.d3dg.set_host_presents(true);
+				self.game = Some(game);
+			}
 			Err(error) => {
 				eprintln!("xops: {error}");
 				std::process::exit(1);
