@@ -392,6 +392,15 @@ pub trait DataInterface {
 ///
 /// Besides loading the file it calculates the shadows of the map, which is what shades
 /// it.
+///
+/// **This is `Clone`, and the copies are not kept in step.** The renderer takes the block
+/// data by value because it draws from it every frame, while the screen keeps its own for
+/// the collision and the object manager. That is safe only because every path that
+/// changes the shading recomputes it and then hands the result over again: the dark screen
+/// toggle calls `calculation_blockdata` and then `d3dg.load_mapdata`, and both Recovery
+/// paths re-issue `load_mapdata` too. A new caller that recomputes the shading and expects
+/// the renderer to notice without being handed the data again would see stale shadow.
+#[derive(Clone)]
 pub struct BlockDataInterface {
 	datas: i32,
 	data: [Blockdata; MAX_BLOCKS],
