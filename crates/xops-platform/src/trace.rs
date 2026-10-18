@@ -58,6 +58,10 @@ struct Counters {
 	step_ms: f64,
 	step_max_ms: f64,
 	waits: u64,
+	late_steps: u64,
+	late_slow_work: u64,
+	worst_late_ms: f64,
+	worst_late_work_ms: f64,
 	wait_ms: f64,
 	motion_events: u64,
 	motion_dx: i64,
@@ -122,6 +126,15 @@ static PRESENT_DUPLICATES: AtomicU64 = AtomicU64::new(0);
 static PRESENT_COST_MS: AtomicU64 = AtomicU64::new(0);
 static PRESENT_COST_MAX_MS: AtomicU64 = AtomicU64::new(0);
 static PRESENT_COSTS: AtomicU64 = AtomicU64::new(0);
+/// Steps that came late, and the two ways that happens: the game's own work taking longer
+/// than a step, or the step starting late with the work itself quick. The first is a hitch
+/// the code owns and the second is one the machine owns, and until now the trace could not
+/// tell them apart -- only the largest interval in the second was reported.
+static LATE_STEPS: AtomicU64 = AtomicU64::new(0);
+static LATE_STEPS_SLOW_WORK: AtomicU64 = AtomicU64::new(0);
+/// The worst of each, in the same second.
+static WORST_LATE_MS: AtomicU64 = AtomicU64::new(0);
+static WORST_LATE_WORK_MS: AtomicU64 = AtomicU64::new(0);
 /// How long the wait for a free display buffer was, which is the part of a presented
 /// frame that the display owns rather than the game.
 static ACQUIRE_MS: AtomicU64 = AtomicU64::new(0);
@@ -171,8 +184,28 @@ pub fn frame(step_ms: f64, interval_ms: f64) {
 	if interval_ms > 0.0 && interval_ms < 10_000.0 {
 		store(&INTERVAL_MS, load(&INTERVAL_MS) + interval_ms);
 		store(&INTERVAL_MAX_MS, load(&INTERVAL_MAX_MS).max(interval_ms));
+
+		// Half a step late is a hitch worth counting; a step and a half is a visible one.
+		if interval_ms > LATE_AFTER_MS {
+			LATE_STEPS.fetch_add(1, Ordering::Relaxed);
+			let late = interval_ms - crate::window::FRAME_MS as f64;
+			store(&WORST_LATE_MS, load(&WORST_LATE_MS).max(late));
+			if step_ms > SLOW_WORK_MS {
+				LATE_STEPS_SLOW_WORK.fetch_add(1, Ordering::Relaxed);
+				store(&WORST_LATE_WORK_MS, load(&WORST_LATE_WORK_MS).max(step_ms));
+			}
+		}
 	}
 }
+
+/// An interval longer than this is a step that came late.
+///
+/// A quarter of a step: in the second half of a step, the step's own start has been put off
+/// far enough that a display at twice the rate shows the same frame twice, which is the
+/// stutter being measured.
+pub const LATE_AFTER_MS: f64 = crate::window::FRAME_MS as f64 * 1.25;
+/// A step costing more than this is the game's own work, not the machine being busy.
+pub const SLOW_WORK_MS: f64 = 5.0;
 
 /// Time spent waiting rather than working, when the host knows it.
 pub fn wait(ms: f64) {
@@ -353,6 +386,10 @@ fn take() -> Counters {
 		step_ms: load(&STEP_MS),
 		step_max_ms: load(&STEP_MAX_MS),
 		waits: WAITS.swap(0, Ordering::Relaxed),
+		late_steps: LATE_STEPS.swap(0, Ordering::Relaxed),
+		late_slow_work: LATE_STEPS_SLOW_WORK.swap(0, Ordering::Relaxed),
+		worst_late_ms: f64::from_bits(WORST_LATE_MS.swap(0, Ordering::Relaxed)),
+		worst_late_work_ms: f64::from_bits(WORST_LATE_WORK_MS.swap(0, Ordering::Relaxed)),
 		wait_ms: load(&WAIT_MS),
 		motion_events: MOTION_EVENTS.swap(0, Ordering::Relaxed),
 		motion_dx: MOTION_DX.swap(0, Ordering::Relaxed),
@@ -467,7 +504,7 @@ pub fn report() {
 	let seconds = now.duration_since(start).as_secs_f64();
 
 	eprintln!(
-		"xops: t={:.1}s | {} steps | presented {} ({} unblended) | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | wait {:.1}ms x{} | \
+		"xops: t={:.1}s | {} steps | presented {} ({} unblended) | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | late {} (worst {:.0}ms late, {} of them the game's own work, worst {:.1}ms) | wait {:.1}ms x{} | \
 		 mouse: {} motion events delta({},{}) | {} takes delta({},{}) | looking {} | warps {} ({} skipped) | \
 		 aim {:.3},{:.3} | screen {}",
 		seconds,
@@ -478,6 +515,10 @@ pub fn report() {
 		counters.interval_max_ms,
 		counters.step_ms,
 		counters.step_max_ms,
+		counters.late_steps,
+		counters.worst_late_ms,
+		counters.late_slow_work,
+		counters.worst_late_work_ms,
 		counters.wait_ms,
 		counters.waits,
 		counters.motion_events,

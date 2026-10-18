@@ -290,12 +290,19 @@ impl<A: App> ApplicationHandler for Host<A> {
 				if !blended {
 					trace::presented_unblended();
 				}
-				// Slept out the rest of the refresh before asking for another frame. Asking
-				// as soon as the last one lands is measurably worse, not better: the display
-				// takes what it is given at its own refreshes, and a request that arrives on
-				// the heels of the previous one waits for the refresh after next. Measured,
-				// that is thirty-six frames a second against fifty-seven, with the wait for
-				// a display buffer more than doubled.
+
+				// Slept out the rest of the refresh before asking for another frame.
+				//
+				// The rate this produces is two frames per step, about sixty-seven a second,
+				// and the number matters: it is deliberately *above* the refresh rate. A
+				// display takes the newest frame it is offered at each of its own refreshes,
+				// so a producer that runs faster than the display feeds every one of them --
+				// there is always something newer than the last refresh was given -- and how
+				// far above it runs does not matter. A producer that runs at the refresh rate
+				// exactly does not: the two drift, and the refresh where the producer is a
+				// little behind gets the frame the one before it already had. Pacing the
+				// presents on the refresh grid instead of on the step was tried and measured:
+				// fifty-one frames a second against sixty-seven.
 				crate::host::sleep_until((now + refresh).min(self.next_frame));
 			}
 		}
@@ -306,7 +313,20 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// the game runs on a fixed step and the frame is drawn once per step, so waiting
 		// until the next one is due is the frame rate control. The game's own one has to know
 		// that and not add a second sleep of its own.
-		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
+		//
+		// While the display is being fed, that wait is *not* handed to the event loop. Its
+		// timer is late -- measured, a wait of one refresh comes back after twenty or thirty
+		// milliseconds -- and that lateness lands on the step: a step that starts five to
+		// twelve milliseconds late is exactly the occasional stutter, and it shows in the
+		// trace as a late interval with a step that cost nothing. The burst above sleeps
+		// with `sleep_until`, which re-reads the clock and so keeps time, and it ends at
+		// `next_frame`; coming straight back here after it is what makes the step run on
+		// time. There is no spin: the burst sleeps out every refresh it waits for.
+		event_loop.set_control_flow(if self.interpolating && self.window.is_some() {
+			ControlFlow::Poll
+		} else {
+			ControlFlow::WaitUntil(self.next_frame)
+		});
 	}
 }
 

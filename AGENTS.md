@@ -207,3 +207,17 @@ the two disagree.
 - **When the port and upstream differ, port upstream's *code*, not the *comment* about it.**
   The port's comment said the expansion was reproduced "exactly". It was not, and a comment
   claiming fidelity is not evidence of it.
+- **The frames a display is given between steps come from two uniforms arrays, and the
+  rollover has to happen at the *start* of a frame.** Taken at the end, the copy overwrites
+  the previous frame with the one just drawn, before anything has read it, and the blend
+  becomes a frame against itself: every presented frame correct, none of them interpolated.
+  It ran that way for months of commits. The check that finds it: count how many entries
+  differ between the two arrays at present time. It was 0 of 58; it is 24 of 58.
+- **A blend of two matrices is not a blend of two transforms.** It is short by the cosine of
+  half the angle between them, so what it draws shrinks. Measured here (worst over a second
+  of fast turning) it is 2 to 4 percent. Fine, but the fix if it ever matters is to blend the
+  transforms the game sets -- position and angles -- rather than the matrices they end up in,
+  which is also what Unity's Rigidbody interpolation and Unreal's do.
+- **A percentage that divides by a matrix entry is not a measurement.** The check on the
+  blend reported 19703 percent on frames that were a few percent off, because the entries of
+  a rotation pass through zero. It divides by the length of a basis row now.

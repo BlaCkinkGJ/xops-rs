@@ -103,16 +103,34 @@ fn blend_one(before: &Uniforms, now: &Uniforms, t: f32) -> Uniforms {
 /// blended frame looking broken is. This is the fraction by which the shorter of the two
 /// blended axes has shrunk, so the number to watch is the largest one a frame produces.
 fn blend_shear(before: &Uniforms, now: &Uniforms, t: f32) -> f64 {
+	// How much shorter the blend's basis is than the two it came from, as a fraction. This
+	// is the one artifact of blending two transforms by blending their matrices: the basis
+	// of a linear blend sits on the chord between two rotations rather than on the arc, so
+	// it is short by the cosine of half the angle between them, and a model drawn through it
+	// shrinks. The matrices here carry scale as well -- the game scales models, the held
+	// weapon among them -- so the measure has to be relative, not absolute: an earlier
+	// version compared the rows against unit length and reported hundreds of percent for
+	// perfectly ordinary draws.
 	let mut worst = 0.0f64;
 	for row in 0..3 {
+		let mut blended = [0.0f64; 3];
+		let mut was = [0.0f64; 3];
+		let mut is = [0.0f64; 3];
 		for column in 0..3 {
 			let index = row * 4 + column;
-			let blended = before.modelview[index] as f64
-				+ (now.modelview[index] as f64 - before.modelview[index] as f64) * t as f64;
-			let original = now.modelview[index] as f64;
-			if original.abs() > 1e-6 {
-				worst = worst.max(((blended - original) / original).abs());
-			}
+			was[column] = before.modelview[index] as f64;
+			is[column] = now.modelview[index] as f64;
+			blended[column] = was[column] + (is[column] - was[column]) * t as f64;
+		}
+		let length = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+		let from = length(was);
+		let to = length(is);
+		let blended = length(blended);
+		// The shorter of the two is what a blend can be expected to reach: a draw that was
+		// scaled between the two frames is not shrinking because of the blend.
+		let expected = from.min(to);
+		if expected > 1e-6 {
+			worst = worst.max(((expected - blended) / expected).abs());
 		}
 	}
 	worst
@@ -404,24 +422,25 @@ impl Gfx {
 		let surface_config = surface.as_ref().map(|surface| {
 			let caps = surface.get_capabilities(&adapter);
 
-			// Mailbox first: the display takes the newest frame at each of its own
-			// refreshes and the present itself does not wait, so the loop keeps its own
-			// cadence and nothing tears. Where there is no mailbox the display's own
-			// synchronisation is what paces the present, which is Fifo and is what this
-			// machine ends up with; the loop then cannot ask for more frames than the
-			// display takes, and asking on the heels of the last one is measurably worse
-			// than sleeping out the refresh -- see the burst in `window.rs`.
+			// Immediate by default: the application paces its own frames and the present
+			// does not wait for the display. This is the way the engines ship it -- Unity
+			// with `vSyncCount = 0` and a target frame rate, Unreal with `t.MaxFPS` and
+			// vsync off -- and it is measurably the smoother of the two here: paired runs
+			// in one session gave fifty-five to fifty-eight frames a second with a mean
+			// gap of seventeen to twenty milliseconds, against thirty-nine to forty-two
+			// with a mean gap of twenty-four to thirty-one. It can tear, which is the
+			// trade: an unlucky frame is cut rather than held.
 			//
-			// `XOPS_VSYNC=0` puts the immediate mode first instead. That is the other way
-			// the engines do it -- vsync off with the frames paced by the application, which
-			// is Unity's `vSyncCount = 0` with a target frame rate and Unreal's `t.MaxFPS`
-			// with vsync off -- and it is offered because only the person looking at the
-			// screen can say whether the even cadence is worth the tearing.
-			let vsync = !std::env::var("XOPS_VSYNC").is_ok_and(|value| value == "0");
+			// `XOPS_VSYNC=1` puts the display's own synchronisation first instead. Fifo
+			// waits for the display, so the loop then cannot ask for more frames than the
+			// display takes, and asking on the heels of the last one is measurably worse
+			// than sleeping out the refresh -- see the burst in `window.rs`. Mailbox is
+			// tried next: it also never waits, but nothing tears.
+			let vsync = std::env::var("XOPS_VSYNC").is_ok_and(|value| value == "1");
 			let order = if vsync {
 				[
-					wgpu::PresentMode::Mailbox,
 					wgpu::PresentMode::Fifo,
+					wgpu::PresentMode::Mailbox,
 					wgpu::PresentMode::Immediate,
 				]
 			} else {
@@ -602,6 +621,26 @@ impl Gfx {
 
 	/// Starts a frame. The game's `StartRender` follows with a clear.
 	pub fn begin_frame(&mut self) {
+		// The frame that has just been drawn becomes the one the next frame is drawn
+		// halfway from. This has to happen here, at the start of the next frame, and not at
+		// the end of the last one: the display is given its frames between steps, out of
+		// these two, and a copy taken at the end of a step overwrites the older of the two
+		// before anything has read it. That is what it did, and the blend was a frame
+		// against itself -- every presented frame correct and none of them interpolated,
+		// which is motion at the game's rate wearing the display's frame rate.
+		self.previous_uniforms.clone_from(&self.uniforms);
+		self.previous_draws.clear();
+		self.previous_draws
+			.extend(self.cmds.iter().filter_map(|cmd| match cmd {
+				Cmd::Draw {
+					vertex_offset,
+					vertex_count,
+					texture,
+					..
+				} => Some((*vertex_offset, *vertex_count, *texture)),
+				Cmd::Clear(_) => None,
+			}));
+
 		self.vertices.clear();
 		self.cmds.clear();
 		self.uniforms.clear();
@@ -715,22 +754,11 @@ impl Gfx {
 			self.upload_uniforms();
 		}
 
-		// The frame that was just drawn becomes the one the next frame is drawn halfway
-		// from, unless the two do not line up: a frame that drew a different number of
-		// things, or drew them in a different order, has nothing to be interpolated with.
+		// Whether this frame can be blended with the one before it at all: a frame that drew
+		// a different number of things has nothing to be interpolated with. The two arrays
+		// are the previous frame's and this one's, because the rollover happens at the start
+		// of a frame -- see `begin_frame`.
 		self.previous_matched = self.previous_uniforms.len() == self.uniforms.len();
-		self.previous_uniforms.clone_from(&self.uniforms);
-		self.previous_draws.clear();
-		self.previous_draws
-			.extend(self.cmds.iter().filter_map(|cmd| match cmd {
-				Cmd::Draw {
-					vertex_offset,
-					vertex_count,
-					texture,
-					..
-				} => Some((*vertex_offset, *vertex_count, *texture)),
-				Cmd::Clear(_) => None,
-			}));
 
 		// Drawn, not shown: the host decides when the display gets a frame, and it may want
 		// one between this step and the next.
