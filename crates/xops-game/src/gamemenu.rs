@@ -330,7 +330,7 @@ fn draw_link_text(
 /// screen is in.
 pub struct Opening<'a> {
 	base: D3Dscene,
-	world: &'a mut World<'a>,
+	world: World<'a>,
 	add_camera_x: f32,
 	add_camera_y: f32,
 	add_camera_z: f32,
@@ -341,7 +341,15 @@ pub struct Opening<'a> {
 impl<'a> Opening<'a> {
 	/// The upstream constructor. The camera itself is placed in
 	/// [`Opening::create`], which is where upstream places it too.
-	pub fn new(world: &'a mut World<'a>) -> Opening<'a> {
+	/// Hands the world to the screen that comes next. The screens own the world rather than
+	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
+	/// world cannot be stored beside the world itself, which is exactly what a scheduler
+	/// does. Owning it costs one move per screen change.
+	pub fn into_world(self) -> World<'a> {
+		self.world
+	}
+
+	pub fn new(world: World<'a>) -> Opening<'a> {
 		Opening {
 			base: D3Dscene::new(),
 			world,
@@ -371,7 +379,7 @@ impl<'a> Opening<'a> {
 	) -> i32 {
 		// The world lends the resource exclusively here, which is what the map load, the
 		// object build and the sky all need. Every other phase only reads it.
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		let blockflag = self.world.block_data.load_file_data(OPENING_BLOCK);
 		let pointflag = self.world.point_data.load_file_data(OPENING_POINT);
@@ -432,7 +440,7 @@ impl<'a> Opening<'a> {
 
 	/// The upstream `opening::Recovery`, which is called after the renderer was reset.
 	pub fn recovery(&mut self, d3dg: &mut D3DGraphics) -> i32 {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		d3dg.load_mapdata(self.world.block_data.clone(), OPENING_DIR);
 		self.world.objects.recovery(d3dg, resource);
@@ -827,7 +835,7 @@ impl<'a> Opening<'a> {
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
 	) {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		d3dg.cleanup_mapdata();
 		self.world.objects.cleanup(d3dg, resource);
@@ -844,7 +852,7 @@ impl<'a> Opening<'a> {
 /// `mainmenu`: the mission list, the add-ons behind it, and the options pages.
 pub struct MainMenu<'a> {
 	base: D3Dscene,
-	world: &'a mut World<'a>,
+	world: World<'a>,
 
 	/// The demo map loaded behind the menu.
 	demopath: [u8; MAX_PATH],
@@ -886,7 +894,15 @@ impl<'a> MainMenu<'a> {
 	/// the global config upstream, and `CreateOptions` sets it again before anything reads
 	/// it, so it starts false here. `licenseinfobuf` is a heap buffer upstream and a `Vec`
 	/// here.
-	pub fn new(world: &'a mut World<'a>) -> MainMenu<'a> {
+	/// Hands the world to the screen that comes next. The screens own the world rather than
+	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
+	/// world cannot be stored beside the world itself, which is exactly what a scheduler
+	/// does. Owning it costs one move per screen change.
+	pub fn into_world(self) -> World<'a> {
+		self.world
+	}
+
+	pub fn new(world: World<'a>) -> MainMenu<'a> {
 		MainMenu {
 			base: D3Dscene::new(),
 			world,
@@ -921,7 +937,7 @@ impl<'a> MainMenu<'a> {
 		d3dg: &mut D3DGraphics,
 		sound: &mut SoundManager<'_>,
 	) -> i32 {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		// One of the six demo maps, at random.
 		let demo = MAINMENU_DEMOS[get_rand(MAINMENU_DEMOS.len() as i32) as usize];
@@ -1025,7 +1041,7 @@ impl<'a> MainMenu<'a> {
 
 	/// The upstream `mainmenu::Recovery`.
 	pub fn recovery(&mut self, d3dg: &mut D3DGraphics) -> i32 {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		d3dg.load_mapdata(self.world.block_data.clone(), &self.demopath);
 		self.world.objects.recovery(d3dg, resource);
@@ -2295,7 +2311,7 @@ impl<'a> MainMenu<'a> {
 		log: &mut DebugLog,
 		d3dg: &mut D3DGraphics,
 	) {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		d3dg.cleanup_mapdata();
 		self.world.objects.cleanup(d3dg, resource);
@@ -2445,7 +2461,7 @@ mod tests {
 	fn the_official_missions_and_the_addons_are_both_read() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 
 		// The official list: 58 missions, and the first and last are the table's.
 		assert_eq!(TOTAL_OFFICIALMISSION, 58);
@@ -2478,7 +2494,7 @@ mod tests {
 	fn the_mission_scrollbar_knob_sits_at_the_top_and_at_the_bottom() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let frame = Frame::new();
 
 		menu.create_scrollbars(&frame.config);
@@ -2527,7 +2543,7 @@ mod tests {
 	fn an_addon_list_shorter_than_the_screen_does_not_scroll() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let frame = Frame::new();
 
 		let dir = addon_dir("short");
@@ -2553,7 +2569,7 @@ mod tests {
 	fn a_click_on_a_mission_row_takes_that_mission() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
 		frame.enter_menu();
@@ -2577,7 +2593,7 @@ mod tests {
 	fn the_up_and_down_rows_stop_at_the_ends_of_the_list() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
 		menu.create_scrollbars(&frame.config);
@@ -2604,7 +2620,7 @@ mod tests {
 	fn the_switch_row_moves_between_the_two_lists() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
 		menu.create_scrollbars(&frame.config);
@@ -2635,7 +2651,7 @@ mod tests {
 	fn an_addon_row_writes_the_mission_path() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
 		frame.enter_menu();
@@ -2708,7 +2724,7 @@ mod tests {
 	fn the_options_pages_are_built_with_the_upstream_entries() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let config = config();
 
 		menu.create_options(&config);
@@ -2748,7 +2764,7 @@ mod tests {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let config = config();
 
 		menu.create_options(&config);
@@ -2776,7 +2792,7 @@ mod tests {
 	fn the_options_pages_are_reached_by_clicking_their_entries() {
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
 		menu.create_options(&frame.config);
@@ -2821,7 +2837,7 @@ mod tests {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut menu = MainMenu::new(&mut world);
+		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 		let mut window = WindowControl::new();
 
@@ -2936,7 +2952,7 @@ mod tests {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut opening = Opening::new(&mut world);
+		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
 		let mut sound = SoundManager::new(None, None, None);
@@ -2970,7 +2986,7 @@ mod tests {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut opening = Opening::new(&mut world);
+		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
 		let mut sound = SoundManager::new(None, None, None);
@@ -3042,7 +3058,7 @@ mod tests {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
 		let mut world = World::new(&mut resource);
-		let mut opening = Opening::new(&mut world);
+		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
 		let mut sound = SoundManager::new(None, None, None);

@@ -194,7 +194,7 @@ impl HudaLayout {
 pub struct MainGame<'a> {
 	pub base: D3Dscene,
 	/// The mission, shared with whichever screen is on screen.
-	pub world: &'a mut World<'a>,
+	pub world: World<'a>,
 
 	// -- the map and the atmosphere
 	/// `SkyNumber`: which sky the mission set, which also picks the fog colour.
@@ -283,7 +283,15 @@ impl<'a> MainGame<'a> {
 	/// the game starts in. `Camera_HOMEmode` comes from the setting tables upstream, which
 	/// the constructor cannot reach here, so `Create` reads it, which is before the first
 	/// frame either way.
-	pub fn new(world: &'a mut World<'a>) -> MainGame<'a> {
+	/// Hands the world to the screen that comes next. The screens own the world rather than
+	/// borrowing it: a screen lives for many frames, and a struct that holds a borrow of the
+	/// world cannot be stored beside the world itself, which is exactly what a scheduler
+	/// does. Owning it costs one move per screen change.
+	pub fn into_world(self) -> World<'a> {
+		self.world
+	}
+
+	pub fn new(world: World<'a>) -> MainGame<'a> {
 		MainGame {
 			base: D3Dscene::new(),
 			world,
@@ -486,7 +494,7 @@ impl<'a> MainGame<'a> {
 		}
 
 		{
-			let resource = &mut *self.world.resource;
+			let resource = &mut self.world.resource;
 
 			// Load the additional items. The sound is loaded through the resource class,
 			// which is why the manager is here rather than the world.
@@ -650,7 +658,7 @@ impl<'a> MainGame<'a> {
 	/// The upstream `maingame::Recovery`, called after the renderer was reset.
 	pub fn recovery(&mut self, d3dg: &mut D3DGraphics, sound: &mut SoundManager<'_>) -> i32 {
 		let directory = self.mission_directory(self.main_game_info.selectmission_id);
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		// Release and load the additional items.
 		if let Some(sound_ctrl) = sound.sound_ctrl() {
@@ -703,7 +711,7 @@ impl<'a> MainGame<'a> {
 		d3dg: &mut D3DGraphics,
 		sound: &mut SoundManager<'_>,
 	) {
-		let resource = &mut *self.world.resource;
+		let resource = &mut self.world.resource;
 
 		// Release the block data and the object manager.
 		d3dg.cleanup_mapdata();
@@ -1335,7 +1343,7 @@ impl<'a> MainGame<'a> {
 				mif,
 				resource,
 				..
-			} = &mut *self.world;
+			} = &mut self.world;
 			objects.process(
 				cmd_f5id,
 				false,
@@ -1377,7 +1385,7 @@ impl<'a> MainGame<'a> {
 				collision,
 				resource,
 				..
-			} = &mut *self.world;
+			} = &mut self.world;
 			for i in 0..MAX_HUMAN {
 				if !player_ai && i as i32 == player_id {
 					continue;
@@ -4144,7 +4152,7 @@ mod tests {
 	fn a_new_screen_starts_with_every_debug_switch_off() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 
 		assert!(!screen.show_info_debugmode);
 		assert!(!screen.wireframe);
@@ -4167,7 +4175,7 @@ mod tests {
 	fn the_debug_switches_can_be_turned_on() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen.set_show_info_flag(true);
 		screen.wireframe = true;
@@ -4195,7 +4203,7 @@ mod tests {
 	fn the_player_view_sits_on_the_players_head() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen.update_camera(10.0, 5.0, -3.0, false, false);
 
@@ -4213,7 +4221,7 @@ mod tests {
 	fn the_third_person_camera_trails_the_player() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen.camera_f1mode = true;
 		screen.update_camera(10.0, 5.0, -3.0, false, false);
@@ -4237,7 +4245,7 @@ mod tests {
 	fn the_third_person_angle_starts_at_the_upstream_default() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		assert_eq!(screen.view_ry, 0.0);
 		screen.view_ry = VIEW_F1MODE_ANGLE;
@@ -4250,7 +4258,7 @@ mod tests {
 	fn the_death_camera_sweeps_from_above() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen.update_camera(10.0, 5.0, -3.0, true, false);
 
@@ -4267,7 +4275,7 @@ mod tests {
 	fn the_death_motion_and_the_free_camera_leave_the_eye_alone() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen.base.camera_x = 1.0;
 		screen.base.camera_y = 2.0;
@@ -4294,7 +4302,7 @@ mod tests {
 	fn the_third_person_camera_ignores_the_scope() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		// The table: no scope is 65 degrees, the simple scope 30, the precision one 15.
 		close(screen.view_angle(0), degree_to_radian(65.0));
@@ -4329,7 +4337,7 @@ mod tests {
 
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 
 		// Nothing is held yet, on a frame the table has been through once.
 		advance(&mut input_ctrl);
@@ -4367,7 +4375,7 @@ mod tests {
 
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 		assert!(screen.check_input_control(&input_ctrl, &config, ControlKey::KEY_MOVEFORWARD, 0));
 		assert!(!screen.check_input_control(&input_ctrl, &config, ControlKey::KEY_JUMP, 0));
 	}
@@ -4390,7 +4398,7 @@ mod tests {
 
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 		assert!(screen.check_input_control(&input_ctrl, &config, ControlKey::KEY_SHOT, 0));
 		assert!(screen.check_input_control(&input_ctrl, &config, ControlKey::KEY_SHOT, 1));
 	}
@@ -4403,7 +4411,7 @@ mod tests {
 		let mut input_ctrl = InputControl::new();
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		press(&mut input_ctrl, &config, ControlKey::KEY_MOVEFORWARD);
 		screen.input_view_camera(0, 0, 0.0, &input_ctrl, &config);
@@ -4418,7 +4426,7 @@ mod tests {
 		// left mouse button by default, which is its own binding code rather than a key.
 		let mut resource2 = ResourceManager::new();
 		let mut world2 = world_with_a_resource(&mut resource2);
-		let mut screen2 = MainGame::new(&mut world2);
+		let mut screen2 = MainGame::new(world2);
 		let mut input = Input::default();
 		input.handle(&WindowEvent::MouseInput {
 			device_id: unsafe { std::mem::zeroed() },
@@ -4440,7 +4448,7 @@ mod tests {
 	fn the_console_parser_reads_a_command_and_its_number() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		write_cstr(&mut screen.new_command, b"skip 2");
 		assert_eq!(screen.get_command_num(b"skip"), Some(2));
@@ -4490,7 +4498,7 @@ mod tests {
 
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 		screen.show_console = true;
 
 		// Nothing typed yet: the console is empty and every switch is untouched.
@@ -4550,7 +4558,7 @@ mod tests {
 		let mut input_ctrl = InputControl::new();
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let mut screen = MainGame::new(&mut world);
+		let mut screen = MainGame::new(world);
 
 		screen
 			.console_text_box_control
@@ -4577,7 +4585,7 @@ mod tests {
 	fn the_radar_maps_its_own_radius_to_its_own_edge() {
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 
 		// The radar is 200 across and covers 300 world units, so half of it is 100 pixels
 		// and the camera is at the origin facing down positive X.
@@ -4612,7 +4620,7 @@ mod tests {
 
 		let mut resource = ResourceManager::new();
 		let mut world = world_with_a_resource(&mut resource);
-		let screen = MainGame::new(&mut world);
+		let screen = MainGame::new(world);
 
 		// A point the radar covers, plotted from the radar's own corner.
 		assert!(screen
