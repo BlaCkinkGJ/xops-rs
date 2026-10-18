@@ -11,7 +11,7 @@
 //! as a parameter, so the manager's borrow of its own weapons is the one the human
 //! writes through. The manager therefore hands over the same slice it owns:
 //!
-//! ```ignore
+//! ```text
 //! let slot = human.pickup_weapon(weapon_index, &mut self.weapons);
 //! ```
 //!
