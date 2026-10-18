@@ -85,12 +85,9 @@ impl<A: App> ApplicationHandler for Host<A> {
 			}
 		};
 
-		// Only the desktop builds its renderer here. The web one was built before the loop
-		// started, because the browser will not let it wait.
-		#[cfg(not(target_arch = "wasm32"))]
-		let size = window.inner_size();
 		#[cfg(not(target_arch = "wasm32"))]
 		let gfx = {
+			let size = window.inner_size();
 			let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 				backends: wgpu::Backends::all(),
 				..Default::default()
@@ -117,6 +114,15 @@ impl<A: App> ApplicationHandler for Host<A> {
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
 		self.app.init(&window, gfx);
+
+		// The desktop built its renderer from the window's size a moment ago. The web one
+		// was built from the canvas the page had before the platform took it over and sized
+		// it to the window, so this is where it learns the size it actually has.
+		#[cfg(target_arch = "wasm32")]
+		{
+			let size = window.inner_size();
+			self.app.resized(size.width.max(1), size.height.max(1));
+		}
 	}
 
 	fn window_event(
