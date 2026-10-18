@@ -500,6 +500,14 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 		options.mission.as_deref(),
 	)?;
 
+	// The game draws its full-screen overlays in its own screen size, and here the renderer
+	// was built from `--size` rather than from the configuration, so the two are told to
+	// agree before the first frame. They are the same number in the windowed path because
+	// the configuration takes the window's size there.
+	let (width, height) = game.d3dg.gfx_ref().size();
+	game.config
+		.set_screen_size(width as i32, height as i32);
+
 	let mut input = Input::default();
 	let mut rendered = Vec::with_capacity(frames as usize);
 	for _ in 0..frames {

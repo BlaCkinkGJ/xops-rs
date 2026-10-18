@@ -622,4 +622,5 @@ mod tests {
 		assert_eq!(hit_rate(&info), 0.0);
 		assert_eq!(result_lines(&info)[3], b"Accuracy rate  0.0%");
 	}
+
 }

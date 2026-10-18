@@ -96,6 +96,14 @@ impl WindowControl {
 	/// handle and called the two Win32 functions itself, which is why upstream's input class
 	/// held a pointer to this one. A window that cannot warp the cursor (a Wayland one) is
 	/// silent here, as the upstream ignored `SetCursorPos`'s result.
+	/// The window's client size, the upstream `GetWindowClientSize`.
+	///
+	/// The game's own screen size is a setting, and it is the same number as this only while
+	/// the two agree. Anything that has to land on the real window asks here.
+	pub fn client_size(&self) -> Option<(u32, u32)> {
+		self.host.client_size()
+	}
+
 	pub fn set_cursor_position(&self, x: i32, y: i32) {
 		self.host.set_cursor_position(x as f64, y as f64);
 	}

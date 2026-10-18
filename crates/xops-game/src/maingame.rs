@@ -4704,4 +4704,5 @@ mod tests {
 		}
 		assert_eq!(ammo, vec![0xBB, b'3', b' ', 0xBA, b'1', b'2']);
 	}
+
 }

@@ -187,7 +187,17 @@ impl InputControl {
 	/// cursor history, so there is nothing else to update: the WindowsInput back end would
 	/// also have to record the point as the previous frame's.
 	pub fn move_mouse_center(&self, window: &WindowControl, config: &Config) {
-		window.set_cursor_position(config.get_screen_width() / 2, config.get_screen_height() / 2);
+		// The centre of the window, not of the game's configured screen. The game warps the
+		// cursor here every frame and reads how far it moved, so warping to the wrong point
+		// moves it by that difference every frame and the game reads each one as the player
+		// dragging the view that far: the mouse stops steering and the view drifts one way.
+		// The setting is the same number only while it matches the window, which is why this
+		// cannot tell them apart.
+		let (width, height) = window.client_size().unwrap_or((
+			config.get_screen_width().max(1) as u32,
+			config.get_screen_height().max(1) as u32,
+		));
+		window.set_cursor_position(width as i32 / 2, height as i32 / 2);
 	}
 
 	/// `CheckKeyNow`: whether the key is down now.

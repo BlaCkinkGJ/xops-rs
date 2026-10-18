@@ -13,7 +13,8 @@
 
 use crate::briefing::{Briefing, Result};
 use crate::config::Config;
-use crate::debug::{DebugLog, LOG_CHECK};
+use crate::datafile::MIFInterface;
+use crate::debug::DebugLog;
 use crate::d3dgraphics::D3DGraphics;
 use crate::gamemain::World;
 use crate::gamemenu::{MainMenu, Opening};
@@ -195,26 +196,27 @@ pub fn process_screen<'a>(
 			// does not reach into it again.
 			let mut world = take_world(stage);
 			let mut screen = Briefing::new();
-			let error = match world.mif.as_mut() {
-				Some(mif) => screen.create(
-					state,
-					window,
-					config,
-					d3dg,
-					input_ctrl,
-					log,
-					&world.game_info,
-					&world.param,
-					mif,
-				),
-				// A mission whose file was never read. The menu only reaches this state
-				// after choosing a mission, so this is a missing file rather than a path
-				// through the game.
-				None => {
-					log.write_log(LOG_CHECK, b"Briefing", b"no mission file");
-					0
-				}
-			};
+			// The briefing reads the mission itself, from the file the menu chose or from
+			// the parameter tables for an official one, so a world that has not read a
+			// mission yet is not a precondition: it is the normal state coming from the menu.
+			//
+			// This used to skip the create in that case, which skipped the state machine
+			// step the create ends with, so the state stayed on create and the screen was
+			// rebuilt every frame. The window kept showing the last frame it had drawn and
+			// answered nothing, which is what a player sees as the game freezing on the
+			// mission they picked.
+			let mif = world.mif.get_or_insert_with(MIFInterface::new);
+			let error = screen.create(
+				state,
+				window,
+				config,
+				d3dg,
+				input_ctrl,
+				log,
+				&world.game_info,
+				&world.param,
+				mif,
+			);
 			*stage = Some(Stage::Briefing(screen, world));
 			if error == 1 {
 				window.error_info(b"briefing data open failed");
@@ -286,16 +288,12 @@ pub fn process_screen<'a>(
 
 		State::STATE_CREATE_RESULT => {
 			// No error handling upstream either: the result screen has nothing to open.
-			let world = take_world(stage);
+			let mut world = take_world(stage);
 			let mut screen = Result::new();
-			match world.mif.as_ref() {
-				Some(mif) => {
-					screen.create(state, d3dg, log, &world.game_info, &world.param, mif);
-				}
-				None => {
-					log.write_log(LOG_CHECK, b"Result", b"no mission file");
-				}
-			}
+			// The same as the briefing: the mission is read here, so one that has not been
+			// read yet is not a reason to skip, and skipping would skip its state step.
+			let mif = world.mif.get_or_insert_with(MIFInterface::new);
+			screen.create(state, d3dg, log, &world.game_info, &world.param, mif);
 			*stage = Some(Stage::Result(screen, world));
 		}
 		State::STATE_NOW_RESULT => {
@@ -327,6 +325,7 @@ pub fn process_screen<'a>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::resource::ResourceManager;
 
 	/// The upstream frame skip: with the setting on, an odd frame is not drawn at all. The
 	/// predicate is the only arithmetic in this file, and getting it backwards would make
@@ -348,5 +347,64 @@ mod tests {
 		assert!(!draws_this_frame(&config, 1));
 		assert!(draws_this_frame(&config, 2));
 		assert!(!draws_this_frame(&config, 3));
+	}
+
+	/// The briefing is created with no mission file loaded, which is the state the menu
+	/// leaves the world in.
+	///
+	/// The create is what steps the state machine, so a screen whose create was skipped
+	/// could never be left: the state stayed on create, the screen was rebuilt every frame,
+	/// and the window showed the last frame it had drawn while answering nothing at all.
+	/// A player sees that as the game freezing on the mission they picked, and it is what
+	/// picking the top row of the mission list did.
+	#[test]
+	fn the_briefing_is_created_with_no_mission_file_loaded() {
+		let mut state = StateMachine::new();
+		let mut window = WindowControl::new();
+		let mut config = Config::new();
+		let mut input_ctrl = InputControl::new();
+		let mut input = Input::default();
+		let instance =
+			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+				backends: xops_platform::wgpu::Backends::all(),
+				..Default::default()
+			});
+		let gfx = xops_platform::gfx::Gfx::new(&instance, None, 64, 48, None)
+			.expect("a headless renderer");
+		let mut d3dg = D3DGraphics::new(gfx, false, 0);
+		let mut sound = SoundManager::new();
+		let mut sound_ctrl = SoundControl::new();
+		let mut log = DebugLog::new();
+
+		let mut resource = ResourceManager::new();
+		let mut world = World::new(&mut resource);
+		world.game_info.selectmission_id = 0;
+		assert!(world.mif.is_none(), "the menu leaves no mission file behind");
+
+		// The state the menu's selection leads to.
+		state.set_state_mode(1);
+		let mut stage = Some(Stage::Idle(world));
+
+		process_screen(
+			&mut stage,
+			&mut state,
+			&mut window,
+			&mut config,
+			&mut input_ctrl,
+			&mut input,
+			&mut d3dg,
+			&mut sound,
+			&mut sound_ctrl,
+			&mut log,
+			0,
+		);
+
+		// The briefing read its mission, which is the thing that only happens when its
+		// create ran.
+		let world = stage.expect("a stage is always left behind").into_world();
+		assert!(
+			world.mif.is_some(),
+			"the briefing loaded the mission it was asked for"
+		);
 	}
 }
