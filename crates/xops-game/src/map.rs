@@ -279,7 +279,47 @@ impl D3DGraphics {
 			return;
 		}
 
+		let buckets = self.map_buckets();
+
+		// Which slots are in use has to be read before the renderer is borrowed.
+		let drawable: Vec<(usize, usize)> = (0..TOTAL_BLOCKTEXTURE)
+			.filter(|texture_id| !buckets[*texture_id].is_empty())
+			.map(|texture_id| {
+				(
+					self.texture_slot(self.map_texture_id(texture_id)),
+					texture_id,
+				)
+			})
+			.collect();
+
+		let gfx = self.gfx();
+		// The strips are drawn from their first vertex, and a strip's triangle-index
+		// parity sets the winding, so starting at 0 reverses every triangle relative to
+		// starting at 1. The upstream draws from 1 natively and from 0 under the browser
+		// build, where it compensates by making the clockwise winding the front face for
+		// the duration of the draw. This renderer draws from 0 too, so it needs the same
+		// compensation: without it the back faces are kept and the level is drawn inside
+		// out, which still looks like a level until the camera moves.
+		gfx.front_face(gl::GL_CW);
+		for (slot, texture_id) in drawable {
+			gfx.bind_texture(slot);
+			gfx.draw(gl::GL_TRIANGLE_STRIP, &buckets[texture_id]);
+		}
+		gfx.front_face(gl::GL_CCW);
+	}
+
+	/// Groups the map's faces by the texture they use, one bucket per block texture.
+	///
+	/// This is the batching the upstream reaches by walking every block once per texture
+	/// group. Split out from the draw so it can be checked on its own: the sizes are a
+	/// property of the map and the grouping rule, not of the camera, so they can be
+	/// compared against the browser build's recorded draw stream. That comparison is where
+	/// the expected sizes in the tests came from, and it is what caught that the two
+	/// implementations agree vertex for vertex rather than only approximately.
+	pub fn map_buckets(&self) -> [Vec<Vertex>; TOTAL_BLOCKTEXTURE] {
 		let mut buckets: [Vec<Vertex>; TOTAL_BLOCKTEXTURE] = std::array::from_fn(|_| Vec::new());
+		let bs = self.bs();
+
 		for i in 0..bs {
 			let Some(data) = self.block_data().and_then(|blocks| blocks.getdata(i)) else {
 				continue;
@@ -299,15 +339,7 @@ impl D3DGraphics {
 			}
 		}
 
-		for texture_id in 0..TOTAL_BLOCKTEXTURE {
-			if buckets[texture_id].is_empty() {
-				continue;
-			}
-			let slot = self.texture_slot(self.map_texture_id(texture_id));
-			let gfx = self.gfx();
-			gfx.bind_texture(slot);
-			gfx.draw(gl::GL_TRIANGLE_STRIP, &buckets[texture_id]);
-		}
+		buckets
 	}
 
 	/// `GetMapTextureID` (line 2402). -1 covers both an id out of range and a slot with
@@ -390,8 +422,12 @@ impl D3DGraphics {
 
 		let slot = self.texture_slot(id_texture);
 		let gfx = self.gfx();
+		// Same compensation as the map: the strip is drawn from its first vertex here,
+		// which reverses every triangle, so the front face is flipped for the draw.
+		gfx.front_face(gl::GL_CW);
 		gfx.bind_texture(slot);
 		gfx.draw(gl::GL_TRIANGLE_STRIP, &vertices);
+		gfx.front_face(gl::GL_CCW);
 	}
 
 	/// `RenderBoard` (line 2497). A one-unit quad on the x = 0 plane, in whatever world
@@ -536,6 +572,43 @@ mod tests {
 		assert_eq!(blocks.load_file_data(MAP_FILE), 0, "the training map loads");
 		blocks.calculation_blockdata(false);
 		blocks
+	}
+
+	#[test]
+	fn the_map_batches_exactly_as_the_browser_build_does() {
+		// The expected sizes are not derived here. They are read out of the browser
+		// build's recorded draw stream for this map, which is what makes this a check
+		// against the reference rather than against the port's own arithmetic.
+		//
+		// The reference records, immediately after the sky:
+		//
+		//   draw 5 1 1 0 1 1 ... 1512
+		//   draw 5 1 1 0 1 1 ...  252
+		//   draw 5 1 1 0 1 1 ...  252
+		//   draw 5 1 1 0 1 1 ...  144
+		//   draw 5 1 1 0 1 1 ... 1200
+		//   draw 5 1 1 0 1 1 ...   24
+		//
+		// Topology 5 is a triangle strip, and the counts match this batching size for
+		// size in the same order. That is the map renderer agreeing with the browser build
+		// vertex for vertex, which a rendered image could not establish this precisely
+		// because the camera would have to be identical too.
+		if !std::path::Path::new("../../web/data/map0/temp.bd1").is_file() {
+			eprintln!("skipping: the game data is not present");
+			return;
+		}
+
+		let mut graphics = headless();
+		graphics.set_block_data(map_blocks());
+
+		let sizes: Vec<usize> = graphics
+			.map_buckets()
+			.iter()
+			.map(Vec::len)
+			.filter(|size| *size > 0)
+			.collect();
+		assert_eq!(sizes, vec![1512, 252, 252, 144, 1200, 24]);
+		assert_eq!(sizes.iter().sum::<usize>(), 3384);
 	}
 
 	/// Draws one frame of `body` and reads it back.

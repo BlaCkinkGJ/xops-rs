@@ -232,7 +232,8 @@ impl ScrollbarObject {
 	}
 
 	/// The upstream `ScrollbarObject::Draw`. The knob is not drawn when the whole list fits,
-	/// so a bar that has nothing to scroll is only its body.
+	/// so a bar that has nothing to scroll is only its body. The upstream checks its
+	/// renderer pointer for NULL first, which a `&mut` cannot be.
 	pub fn draw(&mut self, d3dg: &mut D3DGraphics) {
 		d3dg.draw_2d_box(
 			self.pos_x,
@@ -385,7 +386,8 @@ impl TextBoxObject {
 
 	/// The upstream `TextBoxObject::ProcessTextBox`. True means Enter was pressed with
 	/// something in the box, which is the caller's cue to take the string and do something
-	/// with it.
+	/// with it. The upstream answers false for a null input pointer, which a `&InputControl`
+	/// cannot be.
 	///
 	/// The caller has to have called [`InputControl::get_input_state`] for this frame, which
 	/// is what the upstream note says too: every check below is a frame edge.
@@ -489,6 +491,47 @@ impl Default for TextBoxObject {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use xops_platform::gfx::Gfx;
+	use xops_platform::wgpu;
+
+	const BLUE: [u8; 4] = [0, 0, 255, 255];
+	const RED: [u8; 4] = [255, 0, 0, 255];
+	const GREEN: [u8; 4] = [0, 255, 0, 255];
+
+	fn headless(width: u32, height: u32) -> Gfx {
+		let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+			backends: wgpu::Backends::all(),
+			..Default::default()
+		});
+		Gfx::new(&instance, None, width, height, None).expect("a headless renderer")
+	}
+
+	/// Runs `body` inside a frame and returns the read-back pixels, top row first.
+	fn render(graphics: &mut D3DGraphics, body: impl FnOnce(&mut D3DGraphics)) -> Vec<u8> {
+		graphics.start_render();
+		body(graphics);
+		assert!(!graphics.end_render(), "frame encoding failed");
+		let (_, _, pixels) = graphics.gfx_ref().read_frame().expect("read frame");
+		pixels
+	}
+
+	fn pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+		let index = ((y * width + x) * 4) as usize;
+		[
+			pixels[index],
+			pixels[index + 1],
+			pixels[index + 2],
+			pixels[index + 3],
+		]
+	}
+
+	/// A blue body, a red knob and a green inner, which is what the render tests sample.
+	fn paint(scrollbar: &mut ScrollbarObject) {
+		let blue = D3DGraphics::get_color_code(0.0, 0.0, 1.0, 1.0);
+		let red = D3DGraphics::get_color_code(1.0, 0.0, 0.0, 1.0);
+		let green = D3DGraphics::get_color_code(0.0, 1.0, 0.0, 1.0);
+		scrollbar.set_color(blue, red, green, red, green, red, green);
+	}
 
 	/// A bar of 100 pixels holding 20 items, 5 of them on screen: 15 items of travel and 25
 	/// pixels of it per item.
@@ -709,5 +752,44 @@ mod tests {
 
 		assert!(!textbox.process_text_box(&input_ctrl));
 		assert_eq!(textbox.get_text_box_str(), b"abc");
+	}
+
+	/// The knob lands on the pixels the scrolled item puts it on, and it moves by its whole
+	/// travel between the first and the last page.
+	#[test]
+	fn the_knob_is_drawn_where_the_scrolled_item_puts_it() {
+		let mut graphics = D3DGraphics::new(headless(32, 32), false, 0);
+		let mut scrollbar = ScrollbarObject::new();
+		scrollbar.create(4, 4, 8, 20, 10, 5, 0);
+		paint(&mut scrollbar);
+
+		// At the first item the knob covers y 4 to 14 of the bar's y 4 to 24.
+		let pixels = render(&mut graphics, |graphics| scrollbar.draw(graphics));
+		assert_eq!(pixel(&pixels, 32, 5, 20), BLUE);
+		assert_eq!(pixel(&pixels, 32, 5, 8), RED);
+		// The inner box is drawn three pixels in from the knob's edge.
+		assert_eq!(pixel(&pixels, 32, 8, 9), GREEN);
+
+		// The last page is five items further, and one item is two pixels of travel.
+		scrollbar.set_scroll_item(5);
+		scrollbar.input(0, 0, false, 0);
+		assert_eq!(scrollbar.knob_y, 10);
+
+		let pixels = render(&mut graphics, |graphics| scrollbar.draw(graphics));
+		assert_eq!(pixel(&pixels, 32, 5, 5), BLUE);
+		assert_eq!(pixel(&pixels, 32, 5, 20), RED);
+	}
+
+	/// A list that fits has no knob at all, so nothing but the body reaches the target.
+	#[test]
+	fn a_list_that_fits_draws_only_the_body() {
+		let mut graphics = D3DGraphics::new(headless(32, 32), false, 0);
+		let mut scrollbar = ScrollbarObject::new();
+		scrollbar.create(4, 4, 8, 20, 3, 5, 0);
+		paint(&mut scrollbar);
+
+		let pixels = render(&mut graphics, |graphics| scrollbar.draw(graphics));
+		assert_eq!(pixel(&pixels, 32, 5, 8), BLUE);
+		assert_eq!(pixel(&pixels, 32, 8, 9), BLUE);
 	}
 }

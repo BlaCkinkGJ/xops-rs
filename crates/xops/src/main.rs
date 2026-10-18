@@ -37,6 +37,7 @@ struct Level {
 	camera_y: f32,
 	camera_z: f32,
 	camera_rx: f32,
+	camera_ry: f32,
 	sky: i32,
 	wireframe: bool,
 }
@@ -46,16 +47,22 @@ struct Shell {
 	graphics: Option<D3DGraphics>,
 	level: Option<Level>,
 	mission: Option<PathBuf>,
+	camera: Option<(f32, f32, f32, f32, f32)>,
 	wireframe: bool,
 	frames: u64,
 }
 
 impl Shell {
-	fn new(mission: Option<PathBuf>, wireframe: bool) -> Shell {
+	fn new(
+		mission: Option<PathBuf>,
+		camera: Option<(f32, f32, f32, f32, f32)>,
+		wireframe: bool,
+	) -> Shell {
 		Shell {
 			graphics: None,
 			level: None,
 			mission,
+			camera,
 			wireframe,
 			frames: 0,
 		}
@@ -109,15 +116,24 @@ impl Shell {
 		};
 
 		let sky = mission.get_skynumber();
-		self.graphics().load_mapdata(blocks, &directory);
-		self.level = Some(Level {
+		let mut level = Level {
 			camera_x: feet_x,
 			camera_y: feet_y + VIEW_HEIGHT,
 			camera_z: feet_z,
 			camera_rx: rx,
+			camera_ry: 0.0,
 			sky,
 			wireframe: self.wireframe,
-		});
+		};
+		if let Some((x, y, z, rx, ry)) = self.camera {
+			level.camera_x = x;
+			level.camera_y = y;
+			level.camera_z = z;
+			level.camera_rx = rx;
+			level.camera_ry = ry;
+		}
+		self.graphics().load_mapdata(blocks, &directory);
+		self.level = Some(level);
 
 		let (width, height) = self.graphics().gfx_ref().size();
 		eprintln!(
@@ -143,7 +159,7 @@ impl Shell {
 				level.camera_y,
 				level.camera_z,
 				level.camera_rx,
-				0.0,
+				level.camera_ry,
 				degree_to_radian(VIEWANGLE_NORMAL),
 			);
 			graphics.render_mapdata(level.wireframe);
@@ -204,6 +220,10 @@ struct Options {
 	/// Where the game's data lives. The mission paths are relative to it, so this is the
 	/// directory the binary runs against.
 	dir: Option<PathBuf>,
+	/// `x,y,z,rx,ry` to place the camera at, overriding the mission's spawn point. The
+	/// comparison against the browser build needs both renderers at the same camera, and
+	/// the spawned one is only right once the object layer decides where the player is.
+	camera: Option<(f32, f32, f32, f32, f32)>,
 	wireframe: bool,
 	help: bool,
 }
@@ -217,6 +237,7 @@ impl Default for Options {
 			height: 480,
 			mission: None,
 			dir: None,
+			camera: None,
 			wireframe: false,
 			help: false,
 		}
@@ -255,6 +276,22 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 				let value = args.get(index).ok_or("--dir needs a path")?;
 				options.dir = Some(PathBuf::from(value));
 			}
+			"--camera" => {
+				index += 1;
+				let value = args.get(index).ok_or("--camera needs x,y,z,rx,ry")?;
+				let parts: Vec<&str> = value.split(',').collect();
+				if parts.len() != 5 {
+					return Err("--camera needs x,y,z,rx,ry".into());
+				}
+				let mut values = [0.0f32; 5];
+				for (slot, part) in parts.iter().enumerate() {
+					values[slot] = part
+						.trim()
+						.parse()
+						.map_err(|_| format!("--camera: {part} is not a number"))?;
+				}
+				options.camera = Some((values[0], values[1], values[2], values[3], values[4]));
+			}
 			"--wireframe" => options.wireframe = true,
 			"--help" | "-h" => options.help = true,
 			other => return Err(format!("unknown argument: {other}")),
@@ -275,6 +312,7 @@ fn usage() -> &'static str {
 
   --mission PATH  a .mif to load and render. Its paths are relative to --dir.
   --dir PATH      the game's data directory, which the mission paths are relative to
+  --camera x,y,z,rx,ry  place the camera here instead of at the mission spawn
   --wireframe     draw the map as a wireframe
   --frames N      render N frames offscreen and write them to --out, then exit
   --out DIR       where those frames go
@@ -311,7 +349,7 @@ fn main() -> ExitCode {
 	let mission = options.mission.clone();
 	let result = match options.frames {
 		Some(frames) => headless(&options, frames),
-		None => window::run(Shell::new(mission, options.wireframe)),
+		None => window::run(Shell::new(mission, options.camera, options.wireframe)),
 	};
 	match result {
 		Ok(()) => ExitCode::SUCCESS,
@@ -329,7 +367,7 @@ fn headless(options: &Options, frames: u64) -> Result<(), String> {
 		..Default::default()
 	});
 	let gfx = Gfx::new(&instance, None, options.width, options.height, None)?;
-	let mut shell = Shell::new(options.mission.clone(), options.wireframe);
+	let mut shell = Shell::new(options.mission.clone(), options.camera, options.wireframe);
 	shell.graphics = Some(D3DGraphics::new(gfx, false, 0));
 	if let Some(path) = options.mission.clone() {
 		shell.load_mission(&path)?;
