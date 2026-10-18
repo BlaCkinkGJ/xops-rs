@@ -10,6 +10,7 @@ pub mod core;
 pub mod datafile;
 pub mod d3dgraphics;
 pub mod debug;
+pub mod gamemain;
 pub mod gui_object;
 pub mod human;
 pub mod motion;

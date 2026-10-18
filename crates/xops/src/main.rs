@@ -13,23 +13,17 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use xops_game::core::degree_to_radian;
 use xops_game::datafile::{
 	get_file_directory, path_from_bytes, BlockDataInterface, MIFInterface, PointDataInterface,
 	POINT_P1TYPE_HUMAN,
 };
 use xops_game::d3dgraphics::D3DGraphics;
+use xops_game::gamemain::{VIEWANGLE_NORMAL, VIEW_HEIGHT};
 use xops_platform::gfx::Gfx;
 use xops_platform::input::Input;
 use xops_platform::window::{self, App};
 use xops_platform::winit::event::WindowEvent;
 use xops_platform::winit::window::Window;
-
-/// `VIEW_HEIGHT` from the upstream `gamemain.h`: the eye sits this far above the feet.
-/// It belongs in the game's main module once that lands.
-const VIEW_HEIGHT: f32 = 19.0;
-/// `VIEWANGLE_NORMAL` from the upstream `gamemain.h`, the standard field of view.
-const VIEWANGLE_NORMAL: f32 = 65.0;
 
 /// What the camera needs, read out of the mission when it loads.
 struct Level {
@@ -160,7 +154,7 @@ impl Shell {
 				level.camera_z,
 				level.camera_rx,
 				level.camera_ry,
-				degree_to_radian(VIEWANGLE_NORMAL),
+				VIEWANGLE_NORMAL,
 			);
 			graphics.render_mapdata(level.wireframe);
 			graphics.set_fog(false, 0);
