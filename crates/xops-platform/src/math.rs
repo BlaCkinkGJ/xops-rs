@@ -354,6 +354,49 @@ impl Mat4 {
 	}
 }
 
+/// `gluUnProject`: window coordinates back to world coordinates.
+///
+/// The projection and the modelview are inverted separately and applied in that order,
+/// which is what the upstream helper does. The window `z` is the depth buffer value, so
+/// zero is the near plane rather than the origin.
+///
+/// Returns `None` when either matrix is singular, or when the transform divides by zero,
+/// which is the upstream's failure return rather than a garbage point.
+pub fn unproject(
+	window: Vec3,
+	model: &Mat4,
+	projection: &Mat4,
+	viewport: (i32, i32, i32, i32),
+) -> Option<Vec3> {
+	let inverse_projection = projection.invert()?;
+
+	// Window coordinates to normalised device coordinates. The viewport is the last one
+	// set, which the renderer keeps.
+	let ndc = Vec4::new(
+		(window.x - viewport.0 as f32) / viewport.2 as f32 * 2.0 - 1.0,
+		(window.y - viewport.1 as f32) / viewport.3 as f32 * 2.0 - 1.0,
+		2.0 * window.z - 1.0,
+		1.0,
+	);
+
+	let eye = inverse_projection.transform_vec4(ndc);
+	if eye.w == 0.0 {
+		return None;
+	}
+	let eye = Vec4::new(eye.x / eye.w, eye.y / eye.w, eye.z / eye.w, 1.0);
+
+	let inverse_model = model.invert()?;
+	let object = inverse_model.transform_vec4(eye);
+	if object.w == 0.0 {
+		return None;
+	}
+	Some(Vec3::new(
+		object.x / object.w,
+		object.y / object.w,
+		object.z / object.w,
+	))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -405,6 +448,47 @@ mod tests {
 	#[test]
 	fn singular_has_no_inverse() {
 		assert!(Mat4::scaling(1.0, 0.0, 1.0).invert().is_none());
+	}
+
+	#[test]
+	fn unproject_inverts_the_pipeline() {
+		// Project a known world point through a real camera and projection, then ask for
+		// it back. This is what places the held weapon, so a sign or a scale error here
+		// puts the rifle behind the player's head.
+		let mut modelview = Mat4::IDENTITY;
+		modelview.mult_look_at(
+			Vec3::new(0.0, 0.0, 0.0),
+			Vec3::new(-1.0, 0.0, 0.0),
+			Vec3::new(0.0, 1.0, 0.0),
+		);
+		let projection = Mat4::perspective(90.0, 1.0, 1.0, 100.0);
+		let viewport = (0, 0, 64, 64);
+
+		let world = Vec3::new(-10.0, 1.0, 2.0);
+		let clip = projection
+			.mul(&modelview)
+			.transform_vec4(Vec4::new(world.x, world.y, world.z, 1.0));
+		assert!(clip.w > 0.0, "the point is in front of the camera");
+		let ndc = Vec3::new(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+		let window = Vec3::new(
+			(ndc.x + 1.0) / 2.0 * 64.0,
+			(ndc.y + 1.0) / 2.0 * 64.0,
+			(ndc.z + 1.0) / 2.0,
+		);
+
+		let back = unproject(window, &modelview, &projection, viewport).expect("unprojects");
+		assert!((back.x - world.x).abs() < 1e-3, "{back:?} vs {world:?}");
+		assert!((back.y - world.y).abs() < 1e-3, "{back:?} vs {world:?}");
+		assert!((back.z - world.z).abs() < 1e-3, "{back:?} vs {world:?}");
+	}
+
+	#[test]
+	fn unproject_refuses_a_singular_pipeline() {
+		// A flattened projection has no inverse, and returning a point anyway would put
+		// the model somewhere arbitrary.
+		let modelview = Mat4::IDENTITY;
+		let projection = Mat4::scaling(1.0, 0.0, 1.0);
+		assert!(unproject(Vec3::ZERO, &modelview, &projection, (0, 0, 64, 64)).is_none());
 	}
 
 	#[test]

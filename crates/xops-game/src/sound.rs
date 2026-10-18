@@ -282,7 +282,7 @@ mod tests {
 	fn a_new_control_has_nothing_loaded_and_full_volume() {
 		let sound = SoundControl::new();
 		assert_eq!(sound.get_total_sounds(), 0);
-		assert_eq!(sound.get_volume(), 1.0);
+		assert_eq!(sound.mastervolume, 1.0);
 		assert_eq!(sound.volume_max, 100);
 		assert!(sound.sound.is_none());
 	}
@@ -309,15 +309,15 @@ mod tests {
 		assert_eq!(sound.volume_max, -100);
 		// Anything under 1% is silence, because the curve has no answer for it.
 		sound.set_volume(0.009);
-		assert_eq!(sound.get_volume(), 0.0);
+		assert_eq!(sound.mastervolume, 0.0);
 		assert_eq!(sound.volume_max, -100);
 		sound.set_volume(2.0);
-		assert_eq!(sound.get_volume(), 1.0);
+		assert_eq!(sound.mastervolume, 1.0);
 		assert_eq!(sound.volume_max, 100);
 
 		// log10(0.5) * -0.2 * 200 = 12.04, so half volume is 88 on the device scale.
 		sound.set_volume(0.5);
-		assert_eq!(sound.get_volume(), 0.5);
+		assert_eq!(sound.mastervolume, 0.5);
 		assert_eq!(sound.volume_max, 88);
 		// The curve is steep at the bottom: 1% is 20, and 0.8 is 97.
 		sound.set_volume(0.01);

@@ -10,6 +10,7 @@ pub mod core;
 pub mod datafile;
 pub mod d3dgraphics;
 pub mod debug;
+pub mod gui_object;
 pub mod input;
 pub mod map;
 pub mod model;
@@ -22,6 +23,7 @@ pub mod twod;
 pub mod window;
 
 pub mod resource;
+pub mod scene;
 pub mod sound;
 pub mod soundmanager;
 

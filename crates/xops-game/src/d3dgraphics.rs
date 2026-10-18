@@ -451,6 +451,60 @@ impl D3DGraphics {
 		self.gfx.scale(size, size, size);
 	}
 
+	/// Places the weapon the player is holding, from a screen position rather than a world
+	/// one. The HUD offsets are in screen pixels, so they are projected back through the
+	/// camera to get a world point, and the model is scaled by a curve the upstream tuned
+	/// against the screen height.
+	pub fn set_world_transform_player_weapon(
+		&mut self,
+		rotation: bool,
+		camera_rx: f32,
+		camera_ry: f32,
+		rx: f32,
+		size: f32,
+	) {
+		// Slot 0 is the weapon in hand, slot 1 the one in reserve, and the reserve is
+		// drawn unrotated with its back to the camera.
+		let slot = if rotation { 0 } else { 1 };
+		let (hud_x, hud_y, hud_z) = self.hud_weapon_offset(slot);
+		let screen = Vec3::new(hud_x, self.height as f32 - hud_y, hud_z);
+
+		self.reset_world_transform();
+		self.gfx.matrix_mode(gl::GL_MODELVIEW);
+
+		let viewport = self.gfx.get_viewport();
+		let viewport = (
+			viewport.0 as i32,
+			viewport.1 as i32,
+			viewport.2 as i32,
+			viewport.3 as i32,
+		);
+		let modelview = self.modelview();
+		let projection = self.projection();
+		let Some(object) = xops_platform::math::unproject(screen, &modelview, &projection, viewport)
+		else {
+			// A singular pipeline means there is no sensible place to put the weapon, so
+			// it is left at the origin rather than somewhere arbitrary.
+			return;
+		};
+
+		// The upstream curve, from the screen height. A taller screen draws a bigger
+		// weapon, and the terms are tuned rather than derived.
+		let height = self.height as f32;
+		let size = size * (0.0004 * height * height - 0.92 * height + 650.0) / 1000.0;
+
+		let to_degrees = 180.0 / std::f32::consts::PI;
+		self.gfx.translate(object.x, object.y, object.z);
+		self.gfx.rotate(camera_rx * to_degrees, 0.0, 1.0, 0.0);
+		self.gfx.rotate(camera_ry * -1.0 * to_degrees, 0.0, 0.0, 1.0);
+		if rotation {
+			self.gfx.rotate(rx * -1.0 * to_degrees, 0.0, 1.0, 0.0);
+		} else {
+			self.gfx.rotate(180.0, 0.0, 1.0, 0.0);
+		}
+		self.gfx.scale(size, size, size);
+	}
+
 	/// Reads the translation out of the current modelview, which is the point the last
 	/// world transform placed the origin at in view space.
 	pub fn get_world_transform_pos(&self) -> (f32, f32, f32) {
