@@ -171,69 +171,53 @@ impl<'a> MainGame<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::collision::Collision;
-	use crate::datafile::{BlockDataInterface, PointDataInterface};
-	use crate::parameter::ParameterInfo;
 	use crate::resource::ResourceManager;
-	use crate::sound::SoundControl;
-	use crate::soundmanager::SoundManager;
+
+	/// A world to build the screen against. The resource has to outlive it, so it is
+	/// declared first; nothing is leaked, the chain lives in the test's own scope.
+	fn world_with_a_resource(resource: &mut ResourceManager) -> World<'_> {
+		World::new(resource)
+	}
 
 	#[test]
 	fn a_new_screen_starts_with_every_debug_switch_off() {
-		// The sound class, the resource and the setting tables have to outlive the world
-		// that borrows them, so they are declared first. Nothing here is leaked: the whole
-		// chain lives in this scope.
-		let mut sound_ctrl = SoundControl::new();
-		let resource = ResourceManager::new();
-		let param = ParameterInfo::new();
-		let sound = SoundManager::new(Some(&mut sound_ctrl), Some(&resource), Some(&param));
-
-		let mut world = World {
-			objects: crate::objectmanager::ObjectManager::new(),
-			block_data: BlockDataInterface::new(),
-			point_data: PointDataInterface::new(),
-			mif: None,
-			collision: Collision::new(),
-			param: ParameterInfo::new(),
-			game_info: GameInfo::default(),
-			resource: &resource,
-			sound,
-		};
-
+		let mut resource = ResourceManager::new();
+		let mut world = world_with_a_resource(&mut resource);
 		let screen = MainGame::new(&mut world);
+
 		assert!(!screen.show_info_debugmode);
 		assert!(!screen.wireframe);
 		assert!(!screen.nomodel);
+		assert!(!screen.tag);
+		assert!(!screen.radar);
 		assert!(!screen.show_console);
+		assert!(!screen.event_stop);
 		assert_eq!(screen.get_game_speed(), 1);
 		assert_eq!(screen.sky_number, 0);
+		assert_eq!(screen.message_id, -1);
 	}
 
 	#[test]
 	fn the_debug_switches_can_be_turned_on() {
-		let mut sound_ctrl = SoundControl::new();
-		let resource = ResourceManager::new();
-		let param = ParameterInfo::new();
-		let sound = SoundManager::new(Some(&mut sound_ctrl), Some(&resource), Some(&param));
-
-		let mut world = World {
-			objects: crate::objectmanager::ObjectManager::new(),
-			block_data: BlockDataInterface::new(),
-			point_data: PointDataInterface::new(),
-			mif: None,
-			collision: Collision::new(),
-			param: ParameterInfo::new(),
-			game_info: GameInfo::default(),
-			resource: &resource,
-			sound,
-		};
-
+		let mut resource = ResourceManager::new();
+		let mut world = world_with_a_resource(&mut resource);
 		let mut screen = MainGame::new(&mut world);
+
 		screen.set_show_info_flag(true);
 		screen.wireframe = true;
 		screen.nomodel = true;
 		assert!(screen.show_info_debugmode);
 		assert!(screen.wireframe);
 		assert!(screen.nomodel);
+	}
+
+	#[test]
+	fn the_world_is_built_with_every_human_slot_ready() {
+		// Upstream allocates the AI array up front rather than growing it, and the slots
+		// are indexed by human id, so the count has to match the manager's.
+		let mut resource = ResourceManager::new();
+		let world = world_with_a_resource(&mut resource);
+		assert_eq!(world.ai.len(), crate::objectmanager::MAX_HUMAN);
+		assert_eq!(world.objects.get_total_objects().0, 0);
 	}
 }

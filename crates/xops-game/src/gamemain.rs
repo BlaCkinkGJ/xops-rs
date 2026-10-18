@@ -8,10 +8,9 @@
 use crate::collision::Collision;
 use crate::config::Config;
 use crate::core::degree_to_radian;
-use crate::datafile::{BlockDataInterface, MIFInterface, PointDataInterface};
+use crate::datafile::{AddonList, BlockDataInterface, MIFInterface, PointDataInterface};
 use crate::parameter::ParameterInfo;
 use crate::resource::ResourceManager;
-use crate::soundmanager::SoundManager;
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -169,6 +168,9 @@ pub const CONSOLE_PROMPT: &[u8] = b">";
 pub struct World<'a> {
 	/// The humans, weapons, small objects, bullets, grenades and effects.
 	pub objects: crate::objectmanager::ObjectManager,
+	/// One AI per human slot, indexed by the human's id. Upstream a file scope array,
+	/// `HumanAI[MAX_HUMAN]`, which the game screen alone drives.
+	pub ai: Vec<crate::ai::AIcontrol>,
 	pub block_data: BlockDataInterface,
 	pub point_data: PointDataInterface,
 	pub mif: Option<MIFInterface>,
@@ -179,10 +181,39 @@ pub struct World<'a> {
 	/// in, the game screen updates and the result screen reads after the game screen is
 	/// gone. That last part is why it belongs here rather than on the game screen.
 	pub game_info: GameInfo,
-	/// Loaded once at startup and only read afterwards, so a screen may share it.
-	pub resource: &'a ResourceManager,
-	/// Playback. Borrows the sound class, the resource and the setting tables.
-	pub sound: SoundManager<'a>,
+	/// The addon mission list. Upstream `GameAddon`, a file scope object loaded once at
+	/// startup and read only by the menu, which reaches it from a `render_2d` hook whose
+	/// signature is fixed, so it has to be reachable from the screen.
+	pub addon: AddonList,
+	/// Mutable because loading a mission mutates it: the models, textures and sounds are
+	/// cached inside it, and a screen loads and releases the sky through it on entry and
+	/// exit. The sound manager borrows the same value, which is why the manager is not held
+	/// here: a structure cannot lend one field both mutably and immutably. The scheduler
+	/// builds the manager and passes it to the screen instead.
+	pub resource: &'a mut ResourceManager,
+}
+
+impl<'a> World<'a> {
+	/// Builds the mission state. The resource arrives as a mutable borrow because a screen
+	/// loads and unloads mission assets through it.
+	pub fn new(resource: &'a mut ResourceManager) -> World<'a> {
+		World {
+			objects: crate::objectmanager::ObjectManager::new(),
+			// One per human slot, which is what the upstream array holds from the start
+			// rather than growing as humans are added.
+			ai: (0..crate::objectmanager::MAX_HUMAN as i32)
+				.map(crate::ai::AIcontrol::new)
+				.collect(),
+			block_data: BlockDataInterface::new(),
+			point_data: PointDataInterface::new(),
+			mif: None,
+			collision: Collision::new(),
+			param: ParameterInfo::new(),
+			game_info: GameInfo::default(),
+			addon: AddonList::new(),
+			resource,
+		}
+	}
 }
 
 /// `GameInfo`: what a mission reports when it ends.
