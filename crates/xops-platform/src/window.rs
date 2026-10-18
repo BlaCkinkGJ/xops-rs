@@ -5,7 +5,7 @@
 //! is simulated for. That is the same contract the upstream loop had with `timeGetTime`.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;

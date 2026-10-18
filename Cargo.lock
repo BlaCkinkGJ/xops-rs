@@ -2909,6 +2909,7 @@ dependencies = [
  "jpeg-decoder",
  "png",
  "pollster",
+ "web-time",
  "wgpu",
  "winit",
 ]
