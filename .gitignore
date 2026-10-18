@@ -6,6 +6,9 @@
 
 /target/
 
+# The coverage report, which `cargo llvm-cov` writes beside the tree.
+/lcov.info
+
 # Frames written by `--frames`, which are of the original game's graphics and must
 # not be committed. See the rule in AGENTS.md.
 /frames/

@@ -37,7 +37,7 @@ jobs:
     name: lint, test and coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -45,14 +45,19 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # The renderer tests build a real adapter. A bare runner has none, and then they
-      # do not fail as one missing thing: `Gfx::new` returns an error and every test
-      # that wanted a renderer panics at its headless helper, which reads as fifty-three
-      # failures rather than one cause. The software driver is what makes them run.
-      - name: software Vulkan driver
+      # Two packages the README names, one of them for a reason that is not obvious:
+      #
+      # - `libasound2-dev`, without which the build stops in `alsa-sys`: the audio
+      #   backend is cpal, and on Linux that is ALSA. macOS and Windows build it
+      #   without asking for anything, which is why this only shows up here.
+      # - `mesa-vulkan-drivers`, for the renderer tests. Without it they do not fail
+      #   as one missing thing: `Gfx::new` returns an error and every test that wanted
+      #   a renderer panics at its headless helper, which reads as fifty-three
+      #   failures rather than one cause.
+      - name: the packages the README asks for
         run: |
           sudo apt-get update
-          sudo apt-get install --yes mesa-vulkan-drivers
+          sudo apt-get install --yes libasound2-dev mesa-vulkan-drivers
 
       - name: lint
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -83,7 +88,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
