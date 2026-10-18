@@ -173,3 +173,12 @@ the two disagree.
   the middle of the frames drawn for the display. `Gfx::end_frame` now draws into
   the colour target and stops; `Gfx::present` is the only thing that shows a
   frame.
+- **Everything that draws out of a pool has to be given its model after the pool is
+  built, and the pools are built before the models are loaded.** Upstream hands the
+  bullet and grenade models over in `ObjectManager::SetClass`, called once from
+  `InitGame`; the port's equivalent was reachable only from a test and from its
+  `recovery`, which runs when a screen is recovered after the renderer is reset -- which
+  a mission played from the start never is. So every bullet was drawn with model number
+  minus one, which draws nothing: shots were fired, hit and counted, and were never seen
+  on the way. `ObjectManager::set_class` is called from `init_game` now, where upstream
+  calls it.

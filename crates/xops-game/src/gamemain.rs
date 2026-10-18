@@ -209,6 +209,15 @@ pub fn init_game<'a>(
 
 	let mut world = World::new(resource);
 
+	// The bullet and grenade models, handed to the pools that were built before the models
+	// were loaded. Upstream does this in `ObjectManager::SetClass`, which `InitGame` calls
+	// once the resource is loaded, and the pools are built without a model because they are
+	// built first. Without it every bullet is drawn with the model number minus one, which
+	// draws nothing at all: the shots are fired, they hit, and nothing is ever seen of them
+	// on the way. The objects' own `recovery` does it too, but that runs when a screen is
+	// recovered after the renderer is reset, which a mission played from the start never is.
+	world.objects.set_class(&world.resource);
+
 	match (mode, mif_path) {
 		// A mission was named on the command line, so the addon list is not needed: nothing
 		// will show the menu it feeds.
