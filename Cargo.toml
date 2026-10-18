@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
 	"crates/xops-platform",
+	"crates/xops-game",
 	"crates/xops",
 ]
 

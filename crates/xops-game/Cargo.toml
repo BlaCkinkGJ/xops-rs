@@ -1,0 +1,9 @@
+[package]
+name = "xops-game"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "The game itself: data files, collision, AI, objects, missions."
+
+[dependencies]
+xops-platform.workspace = true

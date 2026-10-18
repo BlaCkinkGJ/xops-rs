@@ -7,9 +7,11 @@
 pub mod gl;
 pub mod math;
 
+pub mod font;
 pub mod frame;
 pub mod gfx;
 pub mod input;
+pub mod texture;
 pub mod window;
 
 /// Re-exported so the binary and the game crate name one version of the window types.

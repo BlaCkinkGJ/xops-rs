@@ -967,22 +967,28 @@ impl Gfx {
 		self.state.front_face = winding;
 	}
 
-	pub fn alpha_func(&mut self, func: Enum, reference: f32) {
+	/// The alpha test, which the game uses to cut out foliage and wire fences. A reference
+	/// of zero with a greater-than comparison is how it discards fully transparent texels.
+	pub fn alpha_test(&mut self, func: Enum, reference: f32) {
 		self.state.alpha_func = func;
 		self.state.alpha_ref = reference;
 	}
 
-	pub fn fog_enabled(&mut self, enabled: bool) {
-		self.state.fog = enabled;
+	/// Whether each capability is on. The game and the renderer's own tests both ask.
+	pub fn depth_test_enabled(&self) -> bool {
+		self.state.depth_test
 	}
 
-	pub fn fog_colour(&mut self, colour: [f32; 3]) {
-		self.state.fog_colour = colour;
+	pub fn cull_enabled(&self) -> bool {
+		self.state.cull
 	}
 
-	pub fn fog_range(&mut self, start: f32, end: f32) {
-		self.state.fog_start = start;
-		self.state.fog_end = end;
+	pub fn blend_enabled(&self) -> bool {
+		self.state.blend
+	}
+
+	pub fn alpha_test_enabled(&self) -> bool {
+		self.state.alpha_test
 	}
 
 	/// The game switches fog off for the 2D and HUD passes, and back on for the world.
@@ -991,6 +997,18 @@ impl Gfx {
 		self.state.fog_colour = colour;
 		self.state.fog_start = start;
 		self.state.fog_end = end;
+	}
+
+	pub fn fog_enabled(&self) -> bool {
+		self.state.fog
+	}
+
+	pub fn fog_colour(&self) -> [f32; 3] {
+		self.state.fog_colour
+	}
+
+	pub fn fog_range(&self) -> (f32, f32) {
+		(self.state.fog_start, self.state.fog_end)
 	}
 
 	// -- textures -----------------------------------------------------------

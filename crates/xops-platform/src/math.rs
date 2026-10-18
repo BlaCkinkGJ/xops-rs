@@ -427,4 +427,37 @@ mod tests {
 		assert!((origin.y).abs() < 1e-5);
 		assert!((origin.z - -10.0).abs() < 1e-5);
 	}
+
+	#[test]
+	fn look_at_is_not_transposed() {
+		// An oblique camera, because an axis-aligned one cannot tell a look-at matrix from
+		// its transpose: every basis vector is of the form (k, 0, 0), so swapping rows for
+		// columns changes nothing and a transposed implementation passes. This camera can.
+		let eye = Vec3::new(3.0, 4.0, 5.0);
+		let center = Vec3::new(-1.0, 0.0, 2.0);
+		let up = Vec3::new(0.0, 1.0, 0.0);
+
+		let mut mv = Mat4::IDENTITY;
+		mv.mult_look_at(eye, center, up);
+
+		// The eye lands on the origin, which a transposed matrix does not manage.
+		let at_eye = mv.transform_point(eye);
+		assert!(at_eye.x.abs() < 1e-4, "{at_eye:?}");
+		assert!(at_eye.y.abs() < 1e-4, "{at_eye:?}");
+		assert!(at_eye.z.abs() < 1e-4, "{at_eye:?}");
+
+		// The target lands straight ahead, down negative z.
+		let ahead = mv.transform_point(center);
+		assert!(ahead.x.abs() < 1e-4, "{ahead:?}");
+		assert!(ahead.y.abs() < 1e-4, "{ahead:?}");
+		assert!(ahead.z < 0.0, "the target is in front of the camera: {ahead:?}");
+
+		// And it is a rigid rotation, so nothing is scaled or sheared on the way.
+		let origin = mv.transform_point(Vec3::ZERO);
+		let x_axis = mv.transform_point(Vec3::new(1.0, 0.0, 0.0)) - origin;
+		let y_axis = mv.transform_point(Vec3::new(0.0, 1.0, 0.0)) - origin;
+		assert!((x_axis.length() - 1.0).abs() < 1e-4, "{x_axis:?}");
+		assert!((y_axis.length() - 1.0).abs() < 1e-4, "{y_axis:?}");
+		assert!(x_axis.dot(y_axis).abs() < 1e-4, "the axes stayed perpendicular");
+	}
 }
