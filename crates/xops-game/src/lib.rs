@@ -30,6 +30,7 @@ pub mod twod;
 pub mod window;
 
 pub mod resource;
+pub mod scheduler;
 pub mod scene;
 pub mod sound;
 pub mod soundmanager;

@@ -330,7 +330,8 @@ fn draw_link_text(
 /// screen is in.
 pub struct Opening<'a> {
 	base: D3Dscene,
-	world: World<'a>,
+	/// The mission state this screen works on. The scheduler moves it in and out.
+	pub world: World<'a>,
 	add_camera_x: f32,
 	add_camera_y: f32,
 	add_camera_z: f32,
@@ -852,7 +853,8 @@ impl<'a> Opening<'a> {
 /// `mainmenu`: the mission list, the add-ons behind it, and the options pages.
 pub struct MainMenu<'a> {
 	base: D3Dscene,
-	world: World<'a>,
+	/// The mission state this screen works on. The scheduler moves it in and out.
+	pub world: World<'a>,
 
 	/// The demo map loaded behind the menu.
 	demopath: [u8; MAX_PATH],
@@ -2460,7 +2462,7 @@ mod tests {
 	#[test]
 	fn the_official_missions_and_the_addons_are_both_read() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 
 		// The official list: 58 missions, and the first and last are the table's.
@@ -2493,7 +2495,7 @@ mod tests {
 	#[test]
 	fn the_mission_scrollbar_knob_sits_at_the_top_and_at_the_bottom() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let frame = Frame::new();
 
@@ -2542,7 +2544,7 @@ mod tests {
 	#[test]
 	fn an_addon_list_shorter_than_the_screen_does_not_scroll() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let frame = Frame::new();
 
@@ -2568,7 +2570,7 @@ mod tests {
 	#[test]
 	fn a_click_on_a_mission_row_takes_that_mission() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
@@ -2592,7 +2594,7 @@ mod tests {
 	#[test]
 	fn the_up_and_down_rows_stop_at_the_ends_of_the_list() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
@@ -2619,7 +2621,7 @@ mod tests {
 	#[test]
 	fn the_switch_row_moves_between_the_two_lists() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
@@ -2650,7 +2652,7 @@ mod tests {
 	#[test]
 	fn an_addon_row_writes_the_mission_path() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
@@ -2723,7 +2725,7 @@ mod tests {
 	#[test]
 	fn the_options_pages_are_built_with_the_upstream_entries() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let config = config();
 
@@ -2763,7 +2765,7 @@ mod tests {
 	fn the_licence_page_shows_the_six_lines_of_this_build() {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let config = config();
 
@@ -2791,7 +2793,7 @@ mod tests {
 	#[test]
 	fn the_options_pages_are_reached_by_clicking_their_entries() {
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 
@@ -2836,7 +2838,7 @@ mod tests {
 	fn the_key_capture_runs_for_five_seconds_and_then_ends() {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut menu = MainMenu::new(world);
 		let mut frame = Frame::new();
 		let mut window = WindowControl::new();
@@ -2951,7 +2953,7 @@ mod tests {
 	fn the_opening_reports_the_map_it_could_not_load() {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
@@ -2985,7 +2987,7 @@ mod tests {
 	fn the_opening_camera_holds_still_then_drifts() {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
@@ -3057,7 +3059,7 @@ mod tests {
 	fn the_opening_ends_after_sixteen_seconds() {
 		let mut d3dg = headless();
 		let mut resource = ResourceManager::new();
-		let mut world = World::new(&mut resource);
+		let world = World::new(&mut resource);
 		let mut opening = Opening::new(world);
 		let mut state = StateMachine::new();
 		let mut log = DebugLog::new();
