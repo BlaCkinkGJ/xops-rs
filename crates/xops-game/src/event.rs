@@ -77,7 +77,12 @@ impl EventControl {
 	/// `reverse` inverts the condition, which makes it a survival check.
 	pub fn check_dead(objects: &mut ObjectManager, target_p4: i16, reverse: bool) -> bool {
 		// A target that does not exist fails the check whichever way round it is.
-		let Some(human) = objects.search_human(target_p4) else {
+		let Some(id) = objects.search_human(target_p4) else {
+			return false;
+		};
+		// The search answers with the slot, because the manager owns the objects, so the
+		// human is looked up from it.
+		let Some(human) = objects.get_human_object(id as i32) else {
 			return false;
 		};
 		let dead = human.dead_flag();
@@ -105,7 +110,10 @@ impl EventControl {
 		target_p4: i16,
 		reverse: bool,
 	) -> bool {
-		let Some(human) = objects.search_human(target_p4) else {
+		let Some(id) = objects.search_human(target_p4) else {
+			return false;
+		};
+		let Some(human) = objects.get_human_object(id as i32) else {
 			return false;
 		};
 		// The rotation the position tuple also carries is not wanted here.
@@ -139,14 +147,17 @@ impl EventControl {
 		// The slots are copied out so the human borrow ends before the weapons are looked
 		// up in the manager, which owns them.
 		let weapon_slots = match objects.search_human(target_p4) {
-			Some(human) => human.weapon().1,
+			Some(id) => match objects.get_human_object(id as i32) {
+				Some(human) => human.get_weapon().1,
+				None => return false,
+			},
 			None => return false,
 		};
 
 		// false: not owned, true: owned
 		let mut flag = false;
 		for slot in weapon_slots.into_iter().flatten() {
-			if let Some(weapon) = objects.get_weapon_object(slot) {
+			if let Some(weapon) = objects.get_weapon_object(slot as i32) {
 				// Check whether the weapon type number matches the target weapon.
 				if weapon.param_data().0 == weapon_id {
 					flag = true;
@@ -200,7 +211,10 @@ impl EventControl {
 	///
 	/// Returns false when no human carries the number.
 	pub fn set_team_id(objects: &mut ObjectManager, target_p4: i16, team_id: i32) -> bool {
-		let Some(human) = objects.search_human(target_p4) else {
+		let Some(id) = objects.search_human(target_p4) else {
+			return false;
+		};
+		let Some(human) = objects.get_human_object_mut(id as i32) else {
 			return false;
 		};
 		human.set_team_id(team_id);
@@ -218,10 +232,13 @@ impl EventControl {
 	) -> bool {
 		// false: not destroyed, true: destroyed or does not exist
 		let mut flag = true;
-		if let Some(small_object) = objects.search_smallobject(target_p4) {
+		if let Some(id) = objects.search_smallobject(target_p4) {
+			let Some(small_object) = objects.get_small_object(id as i32) else {
+				return !reverse;
+			};
 			// The search deliberately keeps destroyed objects findable, so the flag is
 			// what says whether it is broken.
-			if small_object.enable_flag() {
+			if small_object.object.enable_flag() {
 				flag = false;
 			}
 		}

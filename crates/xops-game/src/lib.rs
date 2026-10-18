@@ -20,6 +20,7 @@ pub mod model;
 pub mod object;
 pub mod objectmanager;
 pub mod effects;
+pub mod event;
 pub mod weapon;
 pub mod parameter;
 pub mod statemachine;
