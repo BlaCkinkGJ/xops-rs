@@ -527,6 +527,12 @@ impl D3DGraphics {
 		self.gfx.scale(size, size, size);
 	}
 
+	/// Draws the frame again, partway to the one before it, for a display that wants frames
+	/// more often than the game makes them. See [`xops_platform::gfx::Gfx::present_between`].
+	pub fn present_between(&mut self, t: f32) -> bool {
+		self.gfx.present_between(t).is_ok()
+	}
+
 	/// `InitD3D` (line 153), minus what the host does for it.
 	///
 	/// Upstream this creates the window, the GL context and the two fonts. A window and a

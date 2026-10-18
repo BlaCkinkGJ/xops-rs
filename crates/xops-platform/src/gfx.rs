@@ -72,6 +72,44 @@ enum Cmd {
 	},
 }
 
+/// Every draw's matrices, blended between the frame before and the frame now.
+///
+/// At `t` of zero this is the previous frame and at one it is this one, with the two
+/// matrices each draw carries blended straight through: the world is drawn through them, so
+/// bending them is what places the whole scene partway through the step it is moving.
+fn blend_uniforms(before: &[Uniforms], now: &[Uniforms], t: f32) -> Vec<Uniforms> {
+	now.iter()
+		.zip(before.iter())
+		.map(|(now, before)| {
+			let mut blend = *now;
+			for i in 0..16 {
+				blend.transform[i] =
+					before.transform[i] + (now.transform[i] - before.transform[i]) * t;
+				blend.modelview[i] =
+					before.modelview[i] + (now.modelview[i] - before.modelview[i]) * t;
+			}
+			blend
+		})
+		.collect()
+}
+
+/// The uniform block for a frame's draws, each at its own dynamic-offset slot.
+///
+/// Separate from the renderer so that a second frame built from the same draws can be
+/// packed without borrowing the renderer's own list.
+fn pack_uniforms(uniforms: &[Uniforms], stride: usize) -> Option<Vec<u8>> {
+	if uniforms.is_empty() {
+		return None;
+	}
+	let size = std::mem::size_of::<Uniforms>();
+	let mut block = vec![0u8; uniforms.len() * stride];
+	for (slot, uniforms) in uniforms.iter().enumerate() {
+		let offset = slot * stride;
+		block[offset..offset + size].copy_from_slice(bytemuck::bytes_of(uniforms));
+	}
+	Some(block)
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct PipelineKey {
 	topology: wgpu::PrimitiveTopology,
@@ -211,6 +249,12 @@ pub struct Gfx {
 	vertices: Vec<Vertex>,
 	cmds: Vec<Cmd>,
 	uniforms: Vec<Uniforms>,
+	/// The frame before this one, kept so that the frames between two of the game's own
+	/// steps can be drawn halfway between them. See [`Gfx::present_between`].
+	previous_uniforms: Vec<Uniforms>,
+	/// Whether the frame before this one drew the same things in the same order, which is
+	/// what makes the two comparable draw by draw.
+	previous_matched: bool,
 	/// Texture parameters that arrived before their texture was uploaded, which the
 	/// font atlas does by setting the wrap and then uploading.
 	pending_parameters: Vec<(usize, Enum, Enum)>,
@@ -340,7 +384,13 @@ impl Gfx {
 				present_mode,
 				alpha_mode: caps.alpha_modes[0],
 				view_formats: vec![],
-				desired_maximum_frame_latency: 2,
+				// One frame in flight, not two. This is a game paced at 33 frames a
+				// second, so a queued frame is 30 ms of input lag on top of everything
+				// else the frame costs: two of them are 60 ms between the mouse moving and
+				// the picture showing it, which is the difference between the mouse feeling
+				// immediate and feeling dead. It also decides how long `get_current_texture`
+				// blocks, which is what the frame spends most of its time on.
+				desired_maximum_frame_latency: 1,
 			};
 			surface.configure(&device, &config);
 			config
@@ -448,6 +498,8 @@ impl Gfx {
 			vertices: Vec::new(),
 			cmds: Vec::new(),
 			uniforms: Vec::new(),
+			previous_uniforms: Vec::new(),
+			previous_matched: false,
 			pending_parameters: Vec::new(),
 		})
 	}
@@ -597,21 +649,61 @@ impl Gfx {
 			}
 			self.queue.write_buffer(&self.vertex_buffer, 0, bytes);
 
-			// Each draw's block has to land at its own dynamic-offset slot. Writing them
-			// packed would leave every draw after the first reading a neighbour's
-			// matrices, which looks like geometry flying off screen for no reason.
-			if !self.uniforms.is_empty() {
-				let stride = self.uniform_stride as usize;
-				let size = std::mem::size_of::<Uniforms>();
-				let mut block = vec![0u8; self.uniforms.len() * stride];
-				for (slot, uniforms) in self.uniforms.iter().enumerate() {
-					let offset = slot * stride;
-					block[offset..offset + size].copy_from_slice(bytemuck::bytes_of(uniforms));
-				}
-				self.queue.write_buffer(&self.uniform_buffer, 0, &block);
-			}
+			self.upload_uniforms();
 		}
 
+		// The frame that was just drawn becomes the one the next frame is drawn halfway
+		// from, unless the two do not line up: a frame that drew a different number of
+		// things, or drew them in a different order, has nothing to be interpolated with.
+		self.previous_matched = self.previous_uniforms.len() == self.uniforms.len();
+		self.previous_uniforms.clone_from(&self.uniforms);
+
+		self.encode()
+	}
+
+	/// Uploads the uniforms for every draw, each at its own dynamic-offset slot.
+	///
+	/// Writing them packed would leave every draw after the first reading a neighbour's
+	/// matrices, which looks like geometry flying off screen for no reason.
+	fn upload_uniforms(&mut self) {
+		if let Some(block) = pack_uniforms(&self.uniforms, self.uniform_stride as usize) {
+			self.queue.write_buffer(&self.uniform_buffer, 0, &block);
+		}
+	}
+
+	/// Draws the frame again, halfway to the one before it, and presents that.
+	///
+	/// The game simulates on a fixed 30 ms step, which is what its movement, its animations
+	/// and its timers are all written for: a frame of movement is a frame's worth of
+	/// movement, and running the step faster would run the game faster. That step is not
+	/// what a display wants, though. Thirty milliseconds is 33 frames a second, and a 60 Hz
+	/// display shows a frame for 16.7 ms, so the two never line up: some frames are shown
+	/// for one refresh and some for two, and that unevenness is what a low frame rate looks
+	/// like even when the game is keeping up.
+	///
+	/// So the display gets what it asks for and the game keeps its own rate. The geometry
+	/// drawn is the game's own most recent frame, transformed by a blend of the matrices
+	/// from the last two steps: at `t` of zero the previous step, at `t` of one the current
+	/// one. Nothing is simulated twice and nothing is drawn late.
+	///
+	/// The world is drawn through those matrices, so a blend places every object and the
+	/// camera part of the way through the step's movement. It is a linear blend of two
+	/// rigid transforms and so is not itself rigid: halfway between two quite different
+	/// rotations it shrinks the result slightly.
+	/// ponytail: linear matrix blend, correct to a tenth of a percent per frame here.
+	/// If the game ever turns faster per frame than it does now, blend the angles instead.
+	pub fn present_between(&mut self, t: f32) -> Result<(), String> {
+		if !self.previous_matched || self.uniforms.is_empty() || t <= 0.0 {
+			// Nothing to blend with, or nothing to correct: the frame stands as drawn.
+			return self.encode();
+		}
+		let t = t.clamp(0.0, 1.0);
+
+		let blended = blend_uniforms(&self.previous_uniforms, &self.uniforms, t);
+
+		if let Some(block) = pack_uniforms(&blended, self.uniform_stride as usize) {
+			self.queue.write_buffer(&self.uniform_buffer, 0, &block);
+		}
 		self.encode()
 	}
 
@@ -1511,6 +1603,35 @@ fn create_texture_bind_group(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn a_blend_of_two_frames_is_each_of_them_at_its_ends() {
+		// What the display is shown between two of the game's steps. At the ends it has to
+		// be the frames themselves, or the picture would be wrong at the moment the game's
+		// own frame is drawn; in between it is halfway, which is where an object that moved
+		// between the two frames is drawn.
+		let mut before = Uniforms::zeroed();
+		let mut now = Uniforms::zeroed();
+		for i in 0..16 {
+			before.transform[i] = i as f32;
+			before.modelview[i] = i as f32 * 2.0;
+			now.transform[i] = i as f32 + 10.0;
+			now.modelview[i] = i as f32 * 2.0 + 20.0;
+		}
+
+		let at_zero = blend_uniforms(&[before], &[now], 0.0);
+		assert_eq!(at_zero[0], before, "t of nought is the frame before");
+		let at_one = blend_uniforms(&[before], &[now], 1.0);
+		assert_eq!(at_one[0], now, "t of one is the frame now");
+
+		let half = blend_uniforms(&[before], &[now], 0.5);
+		assert_eq!(half[0].transform[3], before.transform[3] + 5.0);
+		assert_eq!(half[0].modelview[3], before.modelview[3] + 10.0);
+
+		// The renderer's own colour and fog settings are the current frame's: only the two
+		// matrices are a blend.
+		assert_eq!(half[0].fog, now.fog);
+	}
 
 	#[test]
 	fn vertex_matches_the_shader_attributes() {

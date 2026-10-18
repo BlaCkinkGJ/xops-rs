@@ -58,6 +58,17 @@ pub trait App {
 	fn screen(&self) -> &'static str {
 		"unknown"
 	}
+
+	/// Draws the last frame again, partway to the one before it, and presents that.
+	///
+	/// The host asks for this between the game's own steps, so a display can be given a
+	/// frame on every one of its refreshes while the game keeps its own rate. Returning
+	/// false says the app has nothing to show a second time, and then the display is only
+	/// given the game's own frames.
+	fn present_between(&mut self, t: f32) -> bool {
+		let _ = t;
+		false
+	}
 }
 
 struct Host<A: App> {
@@ -71,6 +82,16 @@ struct Host<A: App> {
 	/// When the last burst of frames ended, which is what the loop's idle time is measured
 	/// from.
 	last_burst_end: Option<Instant>,
+	/// When the last step ran. A frame drawn between two steps is placed partway between
+	/// them, measured from here: nought is the previous step, one is the next.
+	last_step_at: Instant,
+	/// When the display is next due a frame of its own, which is its refresh rather than
+	/// the game's step.
+	next_present: Instant,
+	/// Whether the display is given a frame per refresh between the steps at all.
+	interpolating: bool,
+	/// The display's refresh rate in millihertz, where it can be read.
+	monitor_refresh: Option<u32>,
 	frames: u64,
 	/// Whether the cursor is currently kept in the window. Tracked so the platform is only
 	/// told when it changes.
@@ -122,8 +143,19 @@ impl<A: App> ApplicationHandler for Host<A> {
 			}
 		};
 
+		self.monitor_refresh = event_loop
+			.primary_monitor()
+			.and_then(|monitor| monitor.refresh_rate_millihertz());
+		trace::note(&format!(
+			"display refresh {:?} mHz, so a frame every {:.2} ms; interpolation {}",
+			self.monitor_refresh,
+			self.refresh().as_secs_f64() * 1000.0,
+			if self.interpolating { "on" } else { "off" }
+		));
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
+		self.last_step_at = Instant::now();
+		self.next_present = Instant::now();
 		self.app.init(&window, gfx);
 	}
 
@@ -183,6 +215,8 @@ impl<A: App> ApplicationHandler for Host<A> {
 			let started = Instant::now();
 			let interval = started.duration_since(self.last_frame_start).as_secs_f64() * 1000.0;
 			self.last_frame_start = started;
+			// What a frame drawn between two steps measures itself from.
+			self.last_step_at = started;
 			if !self.app.frame(&mut self.input) {
 				event_loop.exit();
 				return;
@@ -208,13 +242,37 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// `about_to_wait` again. That is an endless loop around the event loop, burning a
 		// core and running hundreds of thousands of times a second while the game's frames
 		// themselves are paced by the wait below.
+		// The frame the display wants, which is not the frame the game makes. A 60 Hz display
+		// wants one every 16.7 ms and the game makes one every 30 ms, so without this the
+		// display is given one frame for a refresh here and two there, and that unevenness is
+		// what reads as a low frame rate even when the game is keeping up. These frames are
+		// the game's own last frame drawn partway to the one before it, so nothing is
+		// simulated twice and the game keeps its own speed.
+		let mut next_wake = self.next_frame;
+		if self.interpolating {
+			let now = Instant::now();
+			if now >= self.next_present {
+				let elapsed = now.duration_since(self.last_step_at).as_secs_f64();
+				let t = (elapsed / frame_step().as_secs_f64()) as f32;
+				if self.app.present_between(t) {
+					trace::presented();
+				}
+				self.next_present += self.refresh();
+				if self.next_present <= now {
+					// A stall must not leave a burst of presents queued up behind it.
+					self.next_present = now + self.refresh();
+				}
+			}
+			next_wake = next_wake.min(self.next_present);
+		}
+
 		self.last_burst_end = Some(Instant::now());
 
 		// The host owns the clock, which is the arrangement this file describes at the top:
 		// the game runs on a fixed step and the frame is drawn once per step, so waiting
 		// until the next one is due is the frame rate control. The game's own one has to know
 		// that and not add a second sleep of its own.
-		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
+		event_loop.set_control_flow(ControlFlow::WaitUntil(next_wake));
 	}
 }
 
@@ -294,10 +352,41 @@ impl<A: App> Host<A> {
 			next_frame: Instant::now(),
 			last_frame_start: Instant::now(),
 			last_burst_end: None,
+			last_step_at: Instant::now(),
+			next_present: Instant::now(),
+			interpolating: interpolating(),
+			monitor_refresh: None,
 			frames: 0,
 			cursor_captured: false,
 		}
 	}
+}
+
+/// How often the display wants a frame.
+///
+/// A display whose rate cannot be read is taken for 60 Hz, which is what almost every one of
+/// them is.
+impl<A: App> Host<A> {
+	fn refresh(&self) -> Duration {
+		let millihertz = self.monitor_refresh.unwrap_or(DEFAULT_REFRESH_MILLIHERTZ);
+		if millihertz == 0 {
+			return Duration::from_micros(16_667);
+		}
+		Duration::from_micros(1_000_000_000 / millihertz as u64)
+	}
+}
+
+/// 60 Hz in the units a monitor reports it in.
+const DEFAULT_REFRESH_MILLIHERTZ: u32 = 60_000;
+
+/// Whether the display is given a frame of its own between the game's steps.
+///
+/// On by default, because a display that is only given 33 frames a second while it wants 60
+/// shows them unevenly. `XOPS_INTERPOLATE=0` turns it off, which leaves exactly the frames
+/// the game makes and nothing else: the original's own look.
+fn interpolating() -> bool {
+	static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	*ON.get_or_init(|| !std::env::var("XOPS_INTERPOLATE").is_ok_and(|value| value == "0"))
 }
 
 /// Runs the window until the app quits or the window closes.

@@ -143,3 +143,16 @@ the two disagree.
   control does not run; the offscreen run has no host, so there it does. The host
   must not poll instead: polling with the game's control disabled is a busy loop
   that runs the loop a hundred thousand times a second between frames.
+
+- **The game's rate and the display's rate are different things.** The step is
+  30 ms because every movement, animation and timer in the game is written per
+  frame, so running the step faster runs the game faster. 30 ms is 33 frames a
+  second and a 60 Hz display shows a frame for 16.7 ms, so the two never divide
+  and the picture is uneven however fast the game is: the host draws the frame
+  again between steps with the matrices blended, which is where smoothness comes
+  from. The blend is linear, so it is not itself rigid; it is correct to about a
+  tenth of a percent per frame at this game's turn rates.
+- **One frame in flight.** `desired_maximum_frame_latency` decides both how long
+  `get_current_texture` blocks, which is most of what a frame costs here, and how
+  much input lag the queue adds: at two, a 30 ms game is up to 60 ms behind the
+  mouse.

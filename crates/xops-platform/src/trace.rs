@@ -67,6 +67,7 @@ struct Counters {
 	taken_dy: i64,
 	warps: u64,
 	warps_skipped: u64,
+	presented: u64,
 	screen: &'static str,
 	looking: bool,
 	aim_x: f32,
@@ -88,6 +89,7 @@ static TAKES: AtomicU64 = AtomicU64::new(0);
 static TAKEN_DX: AtomicI64 = AtomicI64::new(0);
 static TAKEN_DY: AtomicI64 = AtomicI64::new(0);
 static WARPS: AtomicU64 = AtomicU64::new(0);
+static PRESENTED: AtomicU64 = AtomicU64::new(0);
 static WARPS_SKIPPED: AtomicU64 = AtomicU64::new(0);
 /// The screen's name, which changes rarely and is only read once a second.
 static SCREEN: Mutex<&'static str> = Mutex::new("none");
@@ -152,6 +154,13 @@ pub fn movement_taken(dx: i32, dy: i32) {
 	TAKES.fetch_add(1, Ordering::Relaxed);
 	TAKEN_DX.fetch_add(dx as i64, Ordering::Relaxed);
 	TAKEN_DY.fetch_add(dy as i64, Ordering::Relaxed);
+}
+
+/// A frame drawn for the display rather than for the game's own step.
+pub fn presented() {
+	if enabled() {
+		PRESENTED.fetch_add(1, Ordering::Relaxed);
+	}
 }
 
 /// A cursor warp, which the game asks for every frame, and whether it was performed.
@@ -226,6 +235,7 @@ fn take() -> Counters {
 		taken_dy: TAKEN_DY.swap(0, Ordering::Relaxed),
 		warps: WARPS.swap(0, Ordering::Relaxed),
 		warps_skipped: WARPS_SKIPPED.swap(0, Ordering::Relaxed),
+		presented: PRESENTED.swap(0, Ordering::Relaxed),
 		screen: *SCREEN.lock().unwrap_or_else(|error| error.into_inner()),
 		looking: LOOKING.load(Ordering::Relaxed) == 1,
 		aim_x: f32::from_bits(AIM_X.load(Ordering::Relaxed) as u32),
@@ -298,11 +308,12 @@ pub fn report() {
 	let seconds = now.duration_since(start).as_secs_f64();
 
 	eprintln!(
-		"xops: t={:.1}s | {} fps | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | wait {:.1}ms x{} | \
+		"xops: t={:.1}s | {} steps | presented {} | interval {:.1}ms (max {:.0}) | step {:.1}ms (max {:.0}) | wait {:.1}ms x{} | \
 		 mouse: {} motion events delta({},{}) | {} takes delta({},{}) | looking {} | warps {} ({} skipped) | \
 		 aim {:.3},{:.3} | screen {}",
 		seconds,
 		counters.frames,
+		counters.presented,
 		counters.interval_ms,
 		counters.interval_max_ms,
 		counters.step_ms,

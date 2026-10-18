@@ -166,6 +166,13 @@ impl Game {
 		true
 	}
 
+	/// Draws the last frame again, partway to the one before it. The host calls this
+	/// between steps so that the display can be given a frame on every refresh while the
+	/// game keeps its own rate.
+	fn present_between(&mut self, t: f32) -> bool {
+		self.d3dg.present_between(t)
+	}
+
 	/// Renders the frame that has been recorded and hands the pixels back, for the
 	/// offscreen mode. The windowed mode presents it instead.
 		fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
@@ -355,6 +362,13 @@ impl App for Shell {
 
 	fn event(&mut self, _event: &WindowEvent) -> bool {
 		true
+	}
+
+	fn present_between(&mut self, t: f32) -> bool {
+		match self.game.as_mut() {
+			Some(game) => game.present_between(t),
+			None => false,
+		}
 	}
 
 	fn screen(&self) -> &'static str {

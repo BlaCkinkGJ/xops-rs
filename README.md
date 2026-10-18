@@ -153,6 +153,20 @@ One pass is `Input`, `Process`, `Sound`, then one `RenderMain`, at the 30 ms ste
 the game's timers assume. The console's `speed` command repeats the first three
 within a single drawn frame.
 
+The game's step is the game's own rate, and the game is written for it: a frame
+of movement is a frame's worth of movement, so running the step faster runs the
+game faster. A display wants frames more often than that, though -- 33 frames a
+second does not divide a 60 Hz refresh, so some frames are shown for one refresh
+and some for two, which is what an uneven picture looks like even when the game
+is keeping up. Between steps the host therefore draws the same frame again,
+partway to the one before it, with each draw's matrices blended: the display gets
+a frame every refresh and the simulation stays at its own rate. `XOPS_INTERPOLATE=0`
+turns that off, which leaves exactly the frames the game makes.
+
+`XOPS_TRACE=1` prints a line a second with the frame rate, the step's cost, the
+mouse's movement as the platform received it and as the game took it, the player's
+view angle, and where the HUD weapon was placed.
+
 ## Verified
 
 Run, not read:
