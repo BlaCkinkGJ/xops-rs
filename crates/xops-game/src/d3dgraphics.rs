@@ -505,8 +505,36 @@ impl D3DGraphics {
 		self.gfx.scale(size, size, size);
 	}
 
-	/// Reads the translation out of the current modelview, which is the point the last
-	/// world transform placed the origin at in view space.
+	/// `InitD3D` (line 153), minus what the host does for it.
+	///
+	/// Upstream this creates the window, the GL context and the two fonts. A window and a
+	/// wgpu device have to exist before the renderer can be built, so the host makes them and
+	/// hands the device over; what is left is the language selection and the fonts: the
+	/// texture font the HUD and the menus draw with, which comes from the game's data, and
+	/// the console's own font, which the code carries.
+	///
+	/// Returns 0 on success and 1 on failure, the upstream contract.
+	pub fn init_d3d(&mut self, texture_font_filename: &[u8], language: i32) -> i32 {
+		self.language_mode = language;
+
+		self.set_texture_font_name(texture_font_filename);
+		let font = self.load_texture(texture_font_filename, true, false);
+		if font == -1 {
+			return 1;
+		}
+		self.texture_font = font;
+
+		self.init_debug_font_data();
+		if !self.load_debug_font_texture() {
+			return 1;
+		}
+
+		0
+	}
+
+	/// `GetWorldTransformPos` equivalent: reads the translation out of the current
+	/// modelview, which is the point the last world transform placed the origin at in view
+	/// space.
 	pub fn get_world_transform_pos(&self) -> (f32, f32, f32) {
 		match self.gfx.get_matrix(gl::GL_MODELVIEW_MATRIX) {
 			Some(m) => (m[12], m[13], m[14]),

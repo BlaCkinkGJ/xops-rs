@@ -433,18 +433,17 @@ impl AIcontrol {
 		resource: &ResourceManager,
 		config: &Config,
 	) {
-		{
-			let Some(ctrlhuman) = obj_mgr.get_human_object(self.ctrlid) else {
-				return;
-			};
-			if !ctrlhuman.enable_flag() {
-				return;
-			}
-			// If dead.
-			if ctrlhuman.hp() <= 0 {
-				self.battlemode = AiMode::AiDead;
-				return;
-			}
+		let Some(ctrlhuman) = obj_mgr.get_human_object(self.ctrlid) else {
+			return;
+		};
+		// Do nothing if the person is not in use.
+		if !ctrlhuman.enable_flag() {
+			return;
+		}
+		// If dead.
+		if ctrlhuman.hp() <= 0 {
+			self.battlemode = AiMode::AiDead;
+			return;
 		}
 
 		// Marked as dead even though the HP is not 0 ... revived?
@@ -2302,16 +2301,10 @@ impl AIcontrol {
 				self.move_path(obj_mgr, blocks, points, coll_d);
 			}
 		} else {
-			// Processing to enter the caution judgment. The corpse draw is the last term
-			// of the chain and only happens when nothing else was found or heard.
-			let found = self.search_enemy(obj_mgr, blocks, coll_d) != 0;
-			let heard = soundlists > 0;
-			let corpse = if !found && !heard {
-				self.check_corpse(obj_mgr, get_rand(MAX_HUMAN as i32))
-			} else {
-				false
-			};
-
+			// Processing to enter the caution judgment. A hit is decided first, so the
+			// search does not run at all on the frame the AI was hit, and the corpse draw
+			// is the last term of the chain, so it only happens when nothing else was
+			// found or heard.
 			if hit_flag {
 				// Was hit.
 				newbattlemode = AiMode::AiCaution;
@@ -2320,16 +2313,26 @@ impl AIcontrol {
 				self.cautionback_posz = self.posz;
 				self.face_caution_flag = true;
 				self.face_caution_rx = caution_rx;
-			} else if found || heard || corpse {
-				newbattlemode = AiMode::AiCaution;
-				self.cautioncnt = 160;
-				self.cautionback_posx = self.posx;
-				self.cautionback_posz = self.posz;
-				self.face_caution_flag = false;
-				self.face_caution_rx = 0.0;
 			} else {
-				// Execute movement.
-				self.move_path(obj_mgr, blocks, points, coll_d);
+				let found = self.search_enemy(obj_mgr, blocks, coll_d) != 0;
+				let heard = soundlists > 0;
+				let corpse = if !found && !heard {
+					self.check_corpse(obj_mgr, get_rand(MAX_HUMAN as i32))
+				} else {
+					false
+				};
+
+				if found || heard || corpse {
+					newbattlemode = AiMode::AiCaution;
+					self.cautioncnt = 160;
+					self.cautionback_posx = self.posx;
+					self.cautionback_posz = self.posz;
+					self.face_caution_flag = false;
+					self.face_caution_rx = 0.0;
+				} else {
+					// Execute movement.
+					self.move_path(obj_mgr, blocks, points, coll_d);
+				}
 			}
 		}
 
@@ -2848,5 +2851,643 @@ impl AIObjectDriver {
 		if self.addry.abs() < degree_to_radian(0.2) {
 			self.addry = 0.0;
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::atomic::{AtomicU64, Ordering};
+	use crate::datafile::TOTAL_BLOCKTEXTURE;
+	use std::fs;
+	use std::path::PathBuf;
+
+	// --- helpers ---------------------------------------------------------
+
+	/// A path in the temp directory that this test can write to.
+	fn temp_path(name: &str) -> PathBuf {
+		// Unique per call, not merely per name. Several tests build the same fixture, and
+		// they run at once, so a path derived only from the name would have them writing the
+		// same file: `fs::write` truncates before it writes, and a reader that arrives in
+		// between sees a half written file and loads a truncated fixture. That reads as a
+		// path test failing for no reason, about one run in ten.
+		static NEXT: AtomicU64 = AtomicU64::new(0);
+		temp_dir().join(format!(
+			"xops_ai_{}_{}_{}",
+			std::process::id(),
+			NEXT.fetch_add(1, Ordering::Relaxed),
+			name
+		))
+	}
+
+	/// The temporary directory, `std::env::temp_dir` under a name that also reads well here.
+	fn temp_dir() -> PathBuf {
+		std::env::temp_dir()
+	}
+
+	/// Places an enabled, living human of type 0 at a position, on a team, with the point
+	/// identifier a path point can name it by.
+	fn place_human(
+		mgr: &mut ObjectManager,
+		id: i32,
+		x: f32,
+		y: f32,
+		z: f32,
+		team: i32,
+		rx: f32,
+		ry: f32,
+		p4: i16,
+	) {
+		let human = mgr.get_human_object_mut(id).expect("the pool holds every slot");
+		human.set_pos_data(x, y, z, rx);
+		// `init` resets the arm angle, so the angles go in after the settings.
+		human.set_param_data(0, 0, p4, team, true);
+		human.set_rx_ry(rx, ry);
+		human.object.set_enable_flag(true);
+	}
+
+	/// A collision that has never been initialised, so every query answers no: an empty
+	/// map, with nothing in the way.
+	fn empty_world() -> (BlockDataInterface, Collision) {
+		(BlockDataInterface::new(), Collision::new())
+	}
+
+	fn write_f32_le(out: &mut Vec<u8>, value: f32) {
+		out.extend_from_slice(&value.to_bits().to_le_bytes());
+	}
+
+	/// A .bd1 image holding one unit cube whose minimum corner is at `(ox, oy, oz)`.
+	fn cube_image(ox: f32, oy: f32, oz: f32) -> Vec<u8> {
+		const CUBE: [(f32, f32, f32); 8] = [
+			(0.0, 0.0, 0.0),
+			(1.0, 0.0, 0.0),
+			(1.0, 1.0, 0.0),
+			(0.0, 1.0, 0.0),
+			(0.0, 0.0, 1.0),
+			(1.0, 0.0, 1.0),
+			(1.0, 1.0, 1.0),
+			(0.0, 1.0, 1.0),
+		];
+
+		let mut out = Vec::new();
+		out.extend_from_slice(&[0u8; 31 * TOTAL_BLOCKTEXTURE]);
+		out.extend_from_slice(&1u16.to_le_bytes());
+		for axis in 0..3 {
+			for corner in CUBE {
+				let value = match axis {
+					0 => corner.0 + ox,
+					1 => corner.1 + oy,
+					_ => corner.2 + oz,
+				};
+				write_f32_le(&mut out, value);
+			}
+		}
+		for i in 24..72 {
+			write_f32_le(&mut out, i as f32);
+		}
+		for j in 0..6 {
+			out.extend_from_slice(&[j as u8, 0, 0, 0]);
+		}
+		out.extend_from_slice(&[0; 4]);
+		out
+	}
+
+	/// A map holding one unit cube, loaded and prepared the way a mission load leaves it.
+	fn cube_map(name: &str, ox: f32, oy: f32, oz: f32) -> (BlockDataInterface, Collision) {
+		let path = temp_path(name);
+		fs::write(&path, cube_image(ox, oy, oz)).expect("write the temp map");
+
+		let mut blocks = BlockDataInterface::new();
+		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
+		blocks.calculation_blockdata(false);
+
+		let mut coll = Collision::new();
+		assert_eq!(coll.init_collision(Some(&blocks)), 0);
+		(blocks, coll)
+	}
+
+	/// A .pd1 image: `points` as (x, y, z, r, p1, p2, p3, p4).
+	fn pd1_image(points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> Vec<u8> {
+		let mut out = Vec::new();
+		out.extend_from_slice(&(points.len() as u16).to_le_bytes());
+		for &(x, y, z, r, p1, p2, p3, p4) in points {
+			write_f32_le(&mut out, x);
+			write_f32_le(&mut out, y);
+			write_f32_le(&mut out, z);
+			write_f32_le(&mut out, r);
+			out.extend_from_slice(&[p1 as u8, p2 as u8, p3 as u8, p4 as u8]);
+		}
+		out
+	}
+
+	/// Loads a point data file the way a mission load does.
+	fn load_points(name: &str, points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
+		let path = temp_path(name);
+		fs::write(&path, pd1_image(points)).expect("write the temp points");
+
+		let mut data = PointDataInterface::new();
+		assert_eq!(data.load_file_data(path.to_string_lossy().as_bytes()), 0);
+		// The file has done its work, and these names are unique so they would otherwise
+		// pile up in the temporary directory.
+		let _ = fs::remove_file(&path);
+		data
+	}
+
+	/// A sound manager with no sound class, so every call just queues.
+	fn sound<'a>() -> SoundManager<'a> {
+		SoundManager::new(None, None, None)
+	}
+
+	/// A renderer with no window and no surface, the same shape the object manager's own
+	/// tests use. Only the paths that have to touch the renderer get one.
+	fn headless() -> D3DGraphics {
+		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+			backends: xops_platform::wgpu::Backends::all(),
+			..Default::default()
+		});
+		let gfx = xops_platform::gfx::Gfx::new(&instance, None, 64, 48, None).expect("a headless renderer");
+		D3DGraphics::new(gfx, false, 0)
+	}
+
+	/// One frame of the AI, with the classes a test does not care about standing in.
+	fn frame(
+		ai: &mut AIcontrol,
+		mgr: &mut ObjectManager,
+		blocks: &BlockDataInterface,
+		points: &PointDataInterface,
+		coll_d: &Collision,
+		sound: &mut SoundManager,
+		d3dg: &D3DGraphics,
+		resource: &ResourceManager,
+		config: &Config,
+	) {
+		ai.process(mgr, blocks, points, coll_d, sound, d3dg, resource, config);
+	}
+
+	// --- perception ------------------------------------------------------
+
+	/// The field of view is the half angle on each axis, and the boundary is where the
+	/// half ends.
+	#[test]
+	fn the_field_of_view_takes_just_inside_and_refuses_just_outside() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		let (blocks, coll_d) = empty_world();
+
+		let mut ai = AIcontrol::new(0);
+		ai.update_pos(&mgr);
+		assert_eq!((ai.posx, ai.posy, ai.posz, ai.rx), (0.0, 0.0, 0.0, 0.0));
+		// The horizontal half angle is AI_SEARCH_RX / 2, which is 55 degrees. A target at
+		// (100 sin t, 0, 100 cos t) reads as the angle t from the +Z the AI faces.
+		for (angle, expected) in [(54.9f32, true), (55.1, false)] {
+			let t = degree_to_radian(angle);
+			place_human(&mut mgr, 1, 100.0 * t.sin(), 0.0, 100.0 * t.cos(), 2, 0.0, 0.0, 1);
+
+			let seen = ai.check_look_enemy(
+				&mgr,
+				&blocks,
+				&coll_d,
+				1,
+				AI_SEARCH_RX,
+				AI_SEARCH_RY,
+				620.0,
+			);
+			assert_eq!(seen.is_some(), expected, "horizontal angle {angle}");
+			if expected {
+				// The distance comes back as the upstream's out_minDist.
+				assert!((seen.unwrap() - 100.0).abs() < 1e-3);
+				assert_eq!(ai.get_enemy_human_id(), 1);
+			}
+		}
+
+		// The vertical half angle is AI_SEARCH_RY / 2, which is 30 degrees. A target at
+		// (0, 100 tan t, 100) reads as the angle t above the horizon.
+		for (angle, expected) in [(29.9f32, true), (30.1, false)] {
+			let h = 100.0 * degree_to_radian(angle).tan();
+			place_human(&mut mgr, 1, 0.0, h, 100.0, 2, 0.0, 0.0, 1);
+
+			let seen = ai.check_look_enemy(
+				&mgr,
+				&blocks,
+				&coll_d,
+				1,
+				AI_SEARCH_RX,
+				AI_SEARCH_RY,
+				620.0,
+			);
+			assert_eq!(seen.is_some(), expected, "vertical angle {angle}");
+		}
+
+		// An ally is never an enemy, whatever the angle.
+		place_human(&mut mgr, 1, 0.0, 0.0, 100.0, 1, 0.0, 0.0, 1);
+		assert!(ai
+			.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0)
+			.is_none());
+
+		// A person out of use is not looked at either.
+		place_human(&mut mgr, 1, 0.0, 0.0, 100.0, 2, 0.0, 0.0, 1);
+		mgr.get_human_object_mut(1).unwrap().object.set_enable_flag(false);
+		assert!(ai
+			.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0)
+			.is_none());
+	}
+
+	/// The detection distance is the maximum the search passes in, inclusive at the edge.
+	#[test]
+	fn the_detection_distance_stops_at_its_boundary() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		let (blocks, coll_d) = empty_world();
+
+		let mut ai = AIcontrol::new(0);
+		ai.update_pos(&mgr);
+
+		// Straight ahead, so only the distance is in question.
+		for (distance, expected) in [(99.9f32, true), (100.0, true), (100.1, false)] {
+			place_human(&mut mgr, 1, 0.0, 0.0, distance, 2, 0.0, 0.0, 1);
+
+			let seen = ai.check_look_enemy(
+				&mgr,
+				&blocks,
+				&coll_d,
+				1,
+				AI_SEARCH_RX,
+				AI_SEARCH_RY,
+				100.0,
+			);
+			assert_eq!(seen.is_some(), expected, "distance {distance}");
+		}
+
+		// A maximum of zero or less turns the distance check off, which is what upstream
+		// does with a check distance of zero.
+		place_human(&mut mgr, 1, 0.0, 0.0, 5000.0, 2, 0.0, 0.0, 1);
+		let seen = ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 0.0);
+		assert!(seen.is_some());
+		assert!((seen.unwrap() - 5000.0).abs() < 0.1);
+	}
+
+	/// A block between the two is what stops a sighting, which is the difference between
+	/// an enemy that tracks through a wall and one that does not.
+	#[test]
+	fn a_block_in_the_way_blocks_the_sight() {
+		// The AI stands ten units out on -X facing +X, so the reference direction is
+		// +X and the target straight ahead is at +X. The eye is at y = 19.
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, -10.0, 0.0, 0.0, 1, PI / 2.0, 0.0, 0);
+		place_human(&mut mgr, 1, 10.0, 0.0, 0.0, 2, 0.0, 0.0, 1);
+
+		let (blocks, coll_d) = cube_map("los.bd1", -1.0, 18.5, -0.5);
+
+		let mut ai = AIcontrol::new(0);
+		ai.update_pos(&mgr);
+		assert_eq!(ai.rx, PI / 2.0);
+
+		// The cube spans x -1..0, y 18.5..19.5 and z -0.5..0.5, so the ray from the eye
+		// at (-10, 19, 0) to the target at (10, 19, 0) goes straight through it.
+		assert!(ai
+			.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0)
+			.is_none());
+
+		// The same map and the same distance, with the target off to the side so the ray
+		// passes beside the cube, is a sighting.
+		place_human(&mut mgr, 1, 10.0, 0.0, 5.0, 2, 0.0, 0.0, 1);
+		let seen = ai.check_look_enemy(&mgr, &blocks, &coll_d, 1, AI_SEARCH_RX, AI_SEARCH_RY, 620.0);
+		assert!(seen.is_some());
+		assert!((seen.unwrap() - (425.0f32).sqrt()).abs() < 1e-3);
+	}
+
+	// --- the aim ---------------------------------------------------------
+
+	/// The allowed error of the AI level moves the tolerance within which an enemy counts
+	/// as captured, and the extremes are the two ends of the level table.
+	#[test]
+	fn the_allowed_error_spreads_the_aim_at_both_ends() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &PointDataInterface::new());
+
+		// Level 1 allows the most error, level 5 the least.
+		ai.set_ai_level(&mgr, 1);
+		assert_eq!(ai.level_param.limitserror, 2);
+		ai.set_ai_level(&mgr, 5);
+		assert_eq!(ai.level_param.limitserror, -3);
+
+		// No scope: 8 degrees at short range, 4 at long range, plus 0.5 and 0.2 degrees
+		// per point of allowed error.
+		ai.set_ai_level(&mgr, 1);
+		ai.longattack = false;
+		assert!((ai.shot_angle(&SCOPE_PARAMETER_0, false) - 0.1570796).abs() < 1e-6);
+		ai.set_ai_level(&mgr, 5);
+		assert!((ai.shot_angle(&SCOPE_PARAMETER_0, false) - 0.1134464).abs() < 1e-6);
+
+		ai.longattack = true;
+		assert!((ai.shot_angle(&SCOPE_PARAMETER_0, false) - 0.0593412).abs() < 1e-6);
+		ai.set_ai_level(&mgr, 1);
+		assert!((ai.shot_angle(&SCOPE_PARAMETER_0, false) - 0.0767945).abs() < 1e-6);
+
+		// A priority runner's short attack is half again as wide.
+		ai.longattack = false;
+		assert!((ai.shot_angle(&SCOPE_PARAMETER_0, true) - 0.2356194).abs() < 1e-6);
+
+		// The capture test is the two angles added, against the tolerance.
+		let eight = degree_to_radian(8.0);
+		assert!(AIcontrol::captured(degree_to_radian(7.9), 0.0, eight));
+		assert!(!AIcontrol::captured(degree_to_radian(8.1), 0.0, eight));
+		assert!(AIcontrol::captured(degree_to_radian(4.0), degree_to_radian(3.9), eight));
+		assert!(!AIcontrol::captured(degree_to_radian(4.0), degree_to_radian(4.1), eight));
+	}
+
+	// --- the reaction delay ----------------------------------------------
+
+	/// Caution is the reaction delay: a hundred and sixty frames, one a frame, with a
+	/// chance of an early end under a hundred, and then back to normal.
+	#[test]
+	fn caution_counts_down_to_zero_and_returns_to_normal() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		let (blocks, coll_d) = empty_world();
+		let points = PointDataInterface::new();
+		let mut sound = sound();
+		let d3dg = headless();
+		let resource = ResourceManager::new();
+		let config = Config::new();
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &points);
+		ai.set_caution_mode();
+
+		assert_eq!(ai.battlemode, AiMode::AiCaution);
+		assert_eq!(ai.cautioncnt, 160);
+
+		// Down to a hundred there is no early end, so it is exactly one a frame.
+		for _ in 0..60 {
+			frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		}
+		assert_eq!(ai.cautioncnt, 100);
+		assert_eq!(ai.battlemode, AiMode::AiCaution);
+
+		// Under a hundred it either drops one or ends at once, and it never rises. The
+		// count only moves down, so it reaches zero within a hundred more frames.
+		let mut previous = ai.cautioncnt;
+		let mut frames = 0;
+		while ai.battlemode == AiMode::AiCaution && frames < 400 {
+			frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+			assert!(
+				ai.cautioncnt <= previous,
+				"caution rose from {previous} to {}",
+				ai.cautioncnt
+			);
+			previous = ai.cautioncnt;
+			frames += 1;
+		}
+
+		assert!(frames <= 101, "the delay ran for {frames} frames");
+		assert_eq!(ai.cautioncnt, 0);
+		assert_eq!(ai.battlemode, AiMode::AiNormal);
+		assert!(!ai.face_caution_flag);
+	}
+
+	// --- the path --------------------------------------------------------
+
+	/// A path of movement points, a wait, a stop and a random fork, which is what the AI
+	/// walks in normal mode.
+	fn path_points() -> PointDataInterface {
+		// p1: 3 is an AI path, 8 a random AI path, 4 a human info point.
+		// p2: 0 walk, 1 run, 2 wait, 3 tracking, 5 stop for five seconds, 7 priority run.
+		// p3: the identifier of the next point. p4: this point's own identifier.
+		load_points(
+			"path.pd1",
+			&[
+				(0.0, 0.0, 0.0, 0.0, 4, 0, 1, 0),
+				(10.0, 0.0, 0.0, 1.0, 3, 0, 2, 1),
+				(20.0, 0.0, 0.0, 2.0, 3, 1, 3, 2),
+				(30.0, 0.0, 0.0, 3.0, 3, 2, 4, 3),
+				(40.0, 0.0, 0.0, 4.0, 3, 5, 5, 4),
+				(50.0, 0.0, 0.0, 5.0, 3, 7, 6, 5),
+				(0.0, 0.0, 0.0, 0.0, 8, 7, 8, 6),
+				(70.0, 0.0, 0.0, 7.0, 3, 0, 7, 7),
+				(80.0, 0.0, 0.0, 8.0, 3, 0, 8, 8),
+				(0.0, 0.0, 0.0, 0.0, 3, 3, 10, 9),
+				(0.0, 0.0, 0.0, 0.0, 4, 0, 0, 10),
+			],
+		)
+	}
+
+	/// The path starts at the point the person's own point names and walks on through the
+	/// points it names, in the mode each of them carries.
+	#[test]
+	fn a_path_walks_through_its_points() {
+		let mut mgr = ObjectManager::new();
+		// The person's own point is 0, whose p3 names the first movement point.
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		let points = path_points();
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &points);
+
+		// The person's own point is a human info point, so the path moved on to point 1.
+		assert_eq!(ai.move_navi.path_pointid, 1);
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (10.0, 0.0, 1.0));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveWalk);
+		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointNull);
+		assert_eq!(ai.move_navi.get_move_mode(), AiMode::AiWalk);
+
+		// Point 2 runs, and its own angle is 2.
+		ai.move_navi.move_path_next_state(&points);
+		assert!(ai.move_navi.move_path_now_state(&mgr, &points));
+		assert_eq!(ai.move_navi.path_pointid, 2);
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (20.0, 0.0, 2.0));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveRun);
+
+		// Point 3 waits, which is a walk mode and a wait point mode.
+		ai.move_navi.move_path_next_state(&points);
+		ai.move_navi.move_path_now_state(&mgr, &points);
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (30.0, 0.0, 3.0));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveWalk);
+		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointWait);
+		assert_eq!(ai.get_path_point_data(&points).unwrap().p2, 2);
+
+		// Point 4 stops for five seconds, and point 5 is priority running.
+		ai.move_navi.move_path_next_state(&points);
+		ai.move_navi.move_path_now_state(&mgr, &points);
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (40.0, 0.0, 4.0));
+		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointStop5Sec);
+
+		ai.move_navi.move_path_next_state(&points);
+		ai.move_navi.move_path_now_state(&mgr, &points);
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (50.0, 0.0, 5.0));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveRun2);
+		assert!(ai.move_navi.get_run2());
+
+		// Point 6 is a random fork, which draws one number and lands on one of the two
+		// points it names.
+		ai.move_navi.move_path_next_state(&points);
+		assert!(!ai.move_navi.move_path_now_state(&mgr, &points));
+		assert_eq!(ai.move_navi.get_move_mode(), AiMode::AiRandom);
+
+		let mut saw_left = false;
+		let mut saw_right = false;
+		for _ in 0..32 {
+			ai.move_navi.path_pointid = 6;
+			assert!(ai.move_navi.move_path_next_state(&points));
+			ai.move_navi.move_path_now_state(&mgr, &points);
+
+			match ai.move_navi.get_target_pos().posx {
+				70.0 => saw_left = true,
+				80.0 => saw_right = true,
+				other => panic!("the fork landed on {other}"),
+			}
+		}
+		assert!(saw_left && saw_right, "both branches of the fork were taken");
+	}
+
+	/// A tracking point follows the person it names, refreshing every frame.
+	#[test]
+	fn a_tracking_point_follows_its_person() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		// The person to track carries the point identifier the info point names.
+		place_human(&mut mgr, 2, 5.0, 0.0, 5.0, 2, 0.0, 0.0, 10);
+		let points = path_points();
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &points);
+		ai.move_navi.path_pointid = 9;
+		ai.move_navi.target_humanid = -1;
+
+		assert!(ai.move_navi.move_path_now_state(&mgr, &points));
+		assert_eq!(ai.move_navi.get_move_mode(), AiMode::AiTracking);
+		assert_eq!(ai.move_navi.get_target_human_id(), 2);
+
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz), (5.0, 5.0));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveTracking);
+		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointTracking);
+
+		// The person walks, and the next frame picks the new position up.
+		mgr.get_human_object_mut(2).unwrap().set_pos_data(7.0, 0.0, 9.0, 0.25);
+		assert!(ai.move_navi.move_path_now_state(&mgr, &points));
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (7.0, 9.0, 0.25));
+
+		// A held wait ignores the path and stays put.
+		ai.set_hold_wait(3.0, 4.0, 0.5);
+		assert!(ai.move_navi.move_path_now_state(&mgr, &points));
+		let target = ai.move_navi.get_target_pos();
+		assert_eq!((target.posx, target.posz, target.rx), (3.0, 4.0, 0.5));
+		assert_eq!(target.movemode, AiMoveNaviFlag::AiNaviMoveWalk);
+		assert_eq!(target.pointmode, AiMoveNaviFlag::AiNaviPointWait);
+	}
+
+	// --- the states ------------------------------------------------------
+
+	/// Each battle state decides one thing on one input, and the decision is what the
+	/// mode and its counters say.
+	#[test]
+	fn each_battle_state_decides_on_its_input() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		place_human(&mut mgr, 1, 10.0, 0.0, 10.0, 2, 0.0, 0.0, 1);
+		let (blocks, coll_d) = empty_world();
+		let points = PointDataInterface::new();
+		let mut sound = sound();
+		let d3dg = headless();
+		let resource = ResourceManager::new();
+		let config = Config::new();
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &points);
+		assert_eq!(ai.battlemode, AiMode::AiNormal);
+
+		// A person with no health is dead, and reports it by number and by name.
+		mgr.get_human_object_mut(0)
+			.unwrap()
+			.set_param_data(-1, 0, 0, 1, true);
+		assert!(mgr.get_human_object(0).unwrap().hp() <= 0);
+		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		assert_eq!(ai.battlemode, AiMode::AiDead);
+		assert_eq!(ai.get_battle_mode(), (0, &b"AI_DEAD"[..]));
+
+		// A person marked dead whose health is back is revived into normal.
+		mgr.get_human_object_mut(0)
+			.unwrap()
+			.set_param_data(0, 0, 0, 1, true);
+		assert!(mgr.get_human_object(0).unwrap().hp() > 0);
+		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		assert_eq!(ai.battlemode, AiMode::AiNormal);
+
+		// Being hit in normal mode starts caution, and points the AI at the shot.
+		mgr.get_human_object_mut(0).unwrap().set_hit_flag(1.25);
+		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		assert_eq!(ai.battlemode, AiMode::AiCaution);
+		assert_eq!(ai.cautioncnt, 160);
+		assert!(ai.face_caution_flag);
+		assert!((ai.face_caution_rx - 1.25).abs() < 1e-6);
+		assert_eq!(ai.get_battle_mode(), (2, &b"AI_CAUTION"[..]));
+
+		// A target already in hand turns caution into an attack, with the attack count
+		// restarted.
+		ai.enemy_human_id = Some(1);
+		ai.actioncnt = 999;
+		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		assert_eq!(ai.battlemode, AiMode::AiAction);
+		assert_eq!(ai.actioncnt, 0);
+		assert_eq!(ai.get_enemy_human_id(), 1);
+
+		// The non-combat switch ends an attack at once, and an attack that ends without
+		// priority running falls back to caution with a fresh count.
+		ai.set_no_fight_flag(true);
+		frame(&mut ai, &mut mgr, &blocks, &points, &coll_d, &mut sound, &d3dg, &resource, &config);
+		assert_eq!(ai.battlemode, AiMode::AiCaution);
+		assert_eq!(ai.cautioncnt, 160);
+		assert_eq!(ai.get_enemy_human_id(), -1);
+		assert!(!ai.face_caution_flag);
+
+		// The forced caution does nothing while priority running.
+		ai.move_navi.movemode = AiMode::AiRun2;
+		ai.battlemode = AiMode::AiNormal;
+		ai.set_caution_mode();
+		assert_eq!(ai.battlemode, AiMode::AiNormal);
+		ai.move_navi.movemode = AiMode::AiNull;
+		ai.set_caution_mode();
+		assert_eq!(ai.battlemode, AiMode::AiCaution);
+		assert_eq!(ai.cautioncnt, 160);
+	}
+
+	/// The attack itself decides which way to turn and which way to hold the arm, from the
+	/// angle to the target and the weapons on both sides.
+	#[test]
+	fn the_attack_turns_toward_its_target() {
+		let mut mgr = ObjectManager::new();
+		// Facing +Z, with the target to the right of that.
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 1, 0.0, 0.0, 0);
+		place_human(&mut mgr, 1, 10.0, 0.0, 10.0, 2, 0.0, 0.0, 1);
+		let (blocks, coll_d) = empty_world();
+		let mut sound = sound();
+		let resource = ResourceManager::new();
+		let config = Config::new();
+
+		let mut ai = AIcontrol::new(0);
+		ai.init(&mgr, &PointDataInterface::new());
+		ai.update_pos(&mgr);
+		ai.enemy_human_id = Some(1);
+
+		ai.action(&mut mgr, &blocks, &coll_d, &mut sound, &resource, &config);
+
+		// The angle to the target is -45 degrees, which is to the right, and the target is
+		// at 14.1 units, which is a short attack with no weapon on either side.
+		assert!(ai.obj_driver.get_mode_flag(AI_CTRL_TURNRIGHT));
+		assert!(!ai.obj_driver.get_mode_flag(AI_CTRL_TURNLEFT));
+		assert!(ai.obj_driver.get_mode_flag(AI_CTRL_TURNDOWN));
+		assert!(!ai.obj_driver.get_mode_flag(AI_CTRL_TURNUP));
+		assert!(!ai.longattack);
+		assert_eq!(ai.actioncnt, 1);
 	}
 }

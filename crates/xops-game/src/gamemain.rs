@@ -6,11 +6,15 @@
 //! screen because the header declares them once and every screen reads them.
 
 use crate::collision::Collision;
+use crate::d3dgraphics::D3DGraphics;
+use crate::input::InputControl;
 use crate::config::Config;
 use crate::core::degree_to_radian;
 use crate::datafile::{AddonList, BlockDataInterface, MIFInterface, PointDataInterface};
 use crate::parameter::ParameterInfo;
 use crate::resource::ResourceManager;
+use crate::sound::SoundControl;
+use crate::statemachine::StateMachine;
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -148,6 +152,94 @@ pub const CONSOLE_PROMPT: &[u8] = b">";
 // ---------------------------------------------------------------------------
 // Structures
 // ---------------------------------------------------------------------------
+
+/// The texture font the HUD, the menus and the console draw with. Upstream
+/// `InitGame` passes this to the renderer's initialisation.
+pub const TEXTURE_FONT: &[u8] = b"data\\char.dds";
+
+/// `InitGame`: loads everything a session needs and returns the world the screens share.
+///
+/// Upstream this also creates the renderer, the window, the input class and the sound
+/// class. The window has to exist before a wgpu surface can, and the device before the
+/// renderer, so the host makes them and hands them in. What is left is what the game
+/// itself decides: the resource load, the input and sound setup, and either the mission it
+/// was asked to start or the list of addons.
+///
+/// The sound class is taken rather than the sound manager, because the manager borrows the
+/// resource and the world holds that mutably. The scheduler builds the manager for the
+/// frame and passes it to the screen.
+pub fn init_game<'a>(
+	config: &Config,
+	d3dg: &mut D3DGraphics,
+	input: &mut InputControl,
+	sound_ctrl: &mut SoundControl,
+	resource: &'a mut ResourceManager,
+	state: &mut StateMachine,
+	mode: i32,
+	mif_path: Option<&[u8]>,
+) -> Result<World<'a>, String> {
+	if d3dg.init_d3d(TEXTURE_FONT, config.get_language()) != 0 {
+		return Err("the texture font did not load".to_string());
+	}
+
+	// The setting tables are constants, so the resource only needs the handle. Everything
+	// else is loaded once here and lives for the session, which is why the world borrows the
+	// resource rather than each screen reloading it.
+	resource.set_parameter_info(ParameterInfo::new());
+	resource.load_human_model(d3dg);
+	resource.load_weapon_model_texture(d3dg);
+	resource.load_weapon_sound(sound_ctrl);
+	resource.load_small_object_model_texture(d3dg);
+	resource.load_small_object_sound(sound_ctrl);
+	resource.load_scope_texture(d3dg);
+	resource.load_bullet_model_texture(d3dg);
+	resource.load_bullet_sound(sound_ctrl);
+	resource.load_effect_texture(d3dg);
+
+	input.set_mouse_limit_flag(config.get_mouse_limit_flag());
+
+	// `ENABLE_ADDCONFIG` is on, so the saved volume is used rather than a constant. A sound
+	// flag of false means silent whatever the volume says.
+	let volume = if config.get_sound_flag() {
+		config.get_volume()
+	} else {
+		0.0
+	};
+	sound_ctrl.set_volume(volume);
+
+	let mut world = World::new(resource);
+
+	match (mode, mif_path) {
+		// A mission was named on the command line, so the addon list is not needed: nothing
+		// will show the menu it feeds.
+		(mode, Some(path)) if mode != 0 => {
+			world.game_info.selectmission_id = -1;
+			let length = path.len().min(crate::core::MAX_PATH - 1);
+			world.game_info.mifpath[..length].copy_from_slice(&path[..length]);
+			world.game_info.mifpath[length] = 0;
+			state.set_state_mode(mode);
+
+			// Mode 2 starts in the mission, so the mif is read here. Mode 1 starts at the
+			// briefing, which reads it itself.
+			if mode == 2 {
+				let mut mif = MIFInterface::new();
+				if mif.load_file_data(path, true) != 0 {
+					return Err("the briefing data did not load".to_string());
+				}
+				world.mif = Some(mif);
+			}
+		}
+		// Otherwise the menu starts, and the addon list is what it lists beside the official
+		// missions.
+		_ => {
+			world.addon.load_file_data(b"addon\\");
+			world.game_info.selectmission_id = 0;
+			world.game_info.mifpath = [0; crate::core::MAX_PATH];
+		}
+	}
+
+	Ok(world)
+}
 
 /// The state that lives for a whole game session, shared by whichever screen is on screen.
 ///

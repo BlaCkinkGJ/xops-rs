@@ -159,8 +159,18 @@ pub fn get_time_name(str: &mut [u8]) {
 	str[len] = 0;
 }
 
-/// The generator's state, the upstream `srand` seed.
-static RAND_STATE: AtomicU32 = AtomicU32::new(0);
+thread_local! {
+	/// The generator's state, the upstream `srand` seed.
+	///
+	/// Thread local rather than a process global, which is a change from the upstream and
+	/// one the game cannot observe: it runs its whole loop on one thread, so a single
+	/// sequence is still a single sequence. What it fixes is the tests. They run in
+	/// parallel and the AI's behaviour depends on its draws, so with one shared state every
+	/// test that exercises the AI perturbs every other one, and a test that passes alone
+	/// fails in the suite. Each thread now starts from zero, which is deterministic, and
+	/// seeds itself with `init_rand` where a varied sequence is wanted.
+	static RAND_STATE: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
 
 /// One step of the Microsoft C runtime's `rand()`, which is the generator the game was
 /// built against: the port produces the sequence the upstream did rather than the host's.
@@ -174,7 +184,16 @@ fn rand_next(state: u32, num: i32) -> (u32, i32) {
 
 /// `InitRand`: seeds the generator from the tick count.
 pub fn init_rand() {
-	RAND_STATE.store(get_time_ms(), Ordering::Relaxed);
+	set_rand_state(get_time_ms());
+}
+
+/// Seeds the generator with a known value.
+///
+/// `init_rand` seeds from the clock, which is what the upstream does and what makes the
+/// game's own sequence vary between runs. A test that depends on the sequence wants a
+/// fixed seed instead, so that a failure reproduces.
+pub fn set_rand_state(state: u32) {
+	RAND_STATE.with(|seed| seed.set(state));
 }
 
 /// `GetRand`: a value from 0 to `num - 1`, and 0 for a range that has no room.
@@ -183,9 +202,11 @@ pub fn get_rand(num: i32) -> i32 {
 		return 0;
 	}
 
-	let (next, value) = rand_next(RAND_STATE.load(Ordering::Relaxed), num);
-	RAND_STATE.store(next, Ordering::Relaxed);
-	value
+	RAND_STATE.with(|seed| {
+		let (next, value) = rand_next(seed.get(), num);
+		seed.set(next);
+		value
+	})
 }
 
 /// `GetFps`: the frame rate over the last `getcnt` frames.
