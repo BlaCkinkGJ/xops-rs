@@ -84,12 +84,6 @@ struct Host<A: App> {
 	/// When the last burst of frames ended, which is what the loop's idle time is measured
 	/// from.
 	last_burst_end: Option<Instant>,
-	/// When the last step ran. A frame drawn between two steps is placed partway between
-	/// them, measured from here: nought is the previous step, one is the next.
-	last_step_at: Instant,
-	/// When the display is next due a frame of its own, which is its refresh rather than
-	/// the game's step.
-	next_present: Instant,
 	/// Whether the display is given a frame per refresh between the steps at all.
 	interpolating: bool,
 	/// The display's refresh rate in millihertz, where it can be read.
@@ -156,8 +150,6 @@ impl<A: App> ApplicationHandler for Host<A> {
 		));
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
-		self.last_step_at = Instant::now();
-		self.next_present = Instant::now();
 		self.app.init(&window, gfx);
 	}
 
@@ -217,8 +209,6 @@ impl<A: App> ApplicationHandler for Host<A> {
 			let started = Instant::now();
 			let interval = started.duration_since(self.last_frame_start).as_secs_f64() * 1000.0;
 			self.last_frame_start = started;
-			// What a frame drawn between two steps measures itself from.
-			self.last_step_at = started;
 			if !self.app.frame(&mut self.input) {
 				event_loop.exit();
 				return;
@@ -244,37 +234,36 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// `about_to_wait` again. That is an endless loop around the event loop, burning a
 		// core and running hundreds of thousands of times a second while the game's frames
 		// themselves are paced by the wait below.
-		// The frame the display wants, which is not the frame the game makes. A 60 Hz display
-		// wants one every 16.7 ms and the game makes one every 30 ms, so without this the
-		// display is given one frame for a refresh here and two there, and that unevenness is
-		// what reads as a low frame rate even when the game is keeping up. These frames are
-		// the game's own last frame drawn partway to the one before it, so nothing is
-		// simulated twice and the game keeps its own speed.
-		let mut next_wake = self.next_frame;
+		// The frames the display is given between this step and the next.
+		//
+		// A display wants a frame every 16.7 ms and the game makes one every 30, and 30 is not
+		// a multiple of 16.7: without this the display is given one frame for a refresh here
+		// and two there, and that unevenness is what reads as a low frame rate even when the
+		// game is keeping up. Each of these frames is the game's own last frame drawn partway
+		// to the one before it, so nothing is simulated twice and the game keeps its own speed.
+		//
+		// Paced with the small sleep rather than with the event loop's timer, which is the one
+		// thing about this that had to be measured: a wait of one refresh handed to the event
+		// loop comes back after twenty or thirty milliseconds here, so half the refreshes would
+		// go by with nothing new on them. The sleep below re-reads the clock between short
+		// sleeps and therefore keeps time. The surface is a mailbox, so the display takes the
+		// newest frame at each of its own refreshes and drops the rest.
 		if self.interpolating {
-			// Every refresh that has come due, not one of them: a pass round the loop takes
-			// as long as a step, so one present a pass is one present a step, which is the
-			// frame rate this exists to beat.
-			let mut presented = 0;
-			while Instant::now() >= self.next_present && presented < 4 {
+			let refresh = self.refresh();
+			loop {
 				let now = Instant::now();
-				let elapsed = now.duration_since(self.last_step_at).as_secs_f64();
-				let t = (elapsed / frame_step().as_secs_f64()) as f32;
+				if now >= self.next_frame {
+					break;
+				}
+				let t = self.interpolation();
 				if self.app.present_between(t) {
-					trace::presented();
+					trace::presented_at(t);
 				} else {
+					trace::presented_at(t);
 					trace::presented_unblended();
 				}
-				self.next_present += self.refresh();
-				presented += 1;
+				crate::host::sleep_until((now + refresh).min(self.next_frame));
 			}
-			let now = Instant::now();
-			if self.next_present <= now {
-				// Fell behind, so start again from here rather than presenting a burst to
-				// catch up with a display that has already moved on.
-				self.next_present = now + self.refresh();
-			}
-			next_wake = next_wake.min(self.next_present);
 		}
 
 		self.last_burst_end = Some(Instant::now());
@@ -283,7 +272,7 @@ impl<A: App> ApplicationHandler for Host<A> {
 		// the game runs on a fixed step and the frame is drawn once per step, so waiting
 		// until the next one is due is the frame rate control. The game's own one has to know
 		// that and not add a second sleep of its own.
-		event_loop.set_control_flow(ControlFlow::WaitUntil(next_wake));
+		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
 }
 
@@ -355,6 +344,21 @@ impl<A: App> Host<A> {
 		window.set_cursor_visible(!looking);
 	}
 
+	/// Where the picture is between two of the game's steps: nought is the step that ran last
+	/// and one is the step that is due next.
+	///
+	/// Measured against the step's own schedule, not against a clock taken when the step
+	/// happened to start. The two are not the same thing: a step takes a millisecond or two,
+	/// so a clock started with it runs out early, and the moment a step ran the factor would
+	/// jump back from past one to nought and the picture would go backwards once a step.
+	/// Against the schedule it cannot: the factor is the part of the current step that this
+	/// frame has reached, and it reaches one exactly as the next step falls due.
+	fn interpolation(&self) -> f32 {
+		let due = self.next_frame - frame_step();
+		let elapsed = Instant::now().duration_since(due).as_secs_f64();
+		(elapsed / frame_step().as_secs_f64()) as f32
+	}
+
 	fn new(app: A) -> Host<A> {
 		Host {
 			app,
@@ -363,8 +367,6 @@ impl<A: App> Host<A> {
 			next_frame: Instant::now(),
 			last_frame_start: Instant::now(),
 			last_burst_end: None,
-			last_step_at: Instant::now(),
-			next_present: Instant::now(),
 			interpolating: interpolating(),
 			monitor_refresh: None,
 			frames: 0,

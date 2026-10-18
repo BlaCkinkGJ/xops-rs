@@ -114,8 +114,17 @@ pub fn operating_environment() -> OperatingEnvironment {
 ///
 /// The granularity is small enough to be accurate and large enough not to spin.
 pub fn sleep_millis(millis: u32) {
+	sleep_until(std::time::Instant::now() + std::time::Duration::from_millis(millis as u64));
+}
+
+/// Sleeps until an instant, in small steps, the same way and for the same reason.
+///
+/// The event loop's own wait is not usable for this: on this system a wait of sixteen
+/// milliseconds comes back after twenty or thirty, so anything that wants to happen between
+/// the game's steps has to keep its own clock, and the only clock that keeps time here is
+/// this one, re-reading it between short sleeps.
+pub fn sleep_until(deadline: std::time::Instant) {
 	let step = std::time::Duration::from_millis(2);
-	let deadline = std::time::Instant::now() + std::time::Duration::from_millis(millis as u64);
 	loop {
 		let now = std::time::Instant::now();
 		if now >= deadline {

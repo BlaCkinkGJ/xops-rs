@@ -69,6 +69,14 @@ struct Counters {
 	warps_skipped: u64,
 	presented: u64,
 	presented_unblended: u64,
+	present_gaps: u64,
+	present_gap_mean_ms: f64,
+	present_gap_min_ms: f64,
+	present_gap_max_ms: f64,
+	present_duplicates: u64,
+	present_t_mean: f64,
+	present_t_max: f64,
+	present_t_duplicates: u64,
 	screen: &'static str,
 	looking: bool,
 	aim_x: f32,
@@ -92,6 +100,21 @@ static TAKEN_DY: AtomicI64 = AtomicI64::new(0);
 static WARPS: AtomicU64 = AtomicU64::new(0);
 static PRESENTED: AtomicU64 = AtomicU64::new(0);
 static PRESENTED_UNBLENDED: AtomicU64 = AtomicU64::new(0);
+/// The gaps between presented frames, which is what smoothness is: a mean of a refresh
+/// with a maximum of two refreshes is smooth, and a run of near-zero gaps followed by a long
+/// one is not, however many frames there were.
+static PRESENT_GAP_MS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_GAP_MAX_MS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_GAP_MIN_MS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_GAPS: AtomicU64 = AtomicU64::new(0);
+static PRESENT_DUPLICATES: AtomicU64 = AtomicU64::new(0);
+static LAST_PRESENT_AT: AtomicU64 = AtomicU64::new(0);
+/// The interpolation factor at each present, summed and counted, so that a factor that is
+/// stuck at one end or repeating is visible.
+static PRESENT_T_SUM: AtomicU64 = AtomicU64::new(0);
+static PRESENT_T_MAX: AtomicU64 = AtomicU64::new(0);
+static PRESENT_T_DUPLICATES: AtomicU64 = AtomicU64::new(0);
+static LAST_T: AtomicU64 = AtomicU64::new(0);
 static WARPS_SKIPPED: AtomicU64 = AtomicU64::new(0);
 /// The screen's name, which changes rarely and is only read once a second.
 static SCREEN: Mutex<&'static str> = Mutex::new("none");
@@ -162,6 +185,45 @@ pub fn movement_taken(dx: i32, dy: i32) {
 pub fn presented() {
 	if enabled() {
 		PRESENTED.fetch_add(1, Ordering::Relaxed);
+	}
+}
+
+/// A presented frame, at the time it went out, with the factor it was blended by.
+///
+/// The gap since the previous one is what makes the picture even or not: a present every
+/// refresh is smooth, and two presents a millisecond apart followed by a long gap is a
+/// stutter however high the count for the second is.
+pub fn presented_at(t: f32) {
+	if !enabled() {
+		return;
+	}
+	PRESENTED.fetch_add(1, Ordering::Relaxed);
+
+	let now = std::time::Instant::now();
+	let start = *START.get_or_init(|| now);
+	let millis = now.duration_since(start).as_secs_f64() * 1000.0;
+
+	let previous = LAST_PRESENT_AT.swap(millis.to_bits(), Ordering::Relaxed);
+	if previous != 0 {
+		let gap = millis - f64::from_bits(previous);
+		PRESENT_GAPS.fetch_add(1, Ordering::Relaxed);
+		store(&PRESENT_GAP_MS, load(&PRESENT_GAP_MS) + gap);
+		store(&PRESENT_GAP_MAX_MS, load(&PRESENT_GAP_MAX_MS).max(gap));
+		let seen = PRESENT_GAPS.load(Ordering::Relaxed);
+		if seen == 1 || gap < load(&PRESENT_GAP_MIN_MS) {
+			store(&PRESENT_GAP_MIN_MS, gap);
+		}
+		if gap < 5.0 {
+			// Two frames the display cannot tell apart, which is a frame wasted.
+			PRESENT_DUPLICATES.fetch_add(1, Ordering::Relaxed);
+		}
+	}
+
+	let last_t = f32::from_bits(LAST_T.swap(u64::from(t.to_bits()), Ordering::Relaxed) as u32);
+	store(&PRESENT_T_SUM, load(&PRESENT_T_SUM) + t as f64);
+	store(&PRESENT_T_MAX, load(&PRESENT_T_MAX).max(t as f64));
+	if (t - last_t).abs() < 0.02 {
+		PRESENT_T_DUPLICATES.fetch_add(1, Ordering::Relaxed);
 	}
 }
 
@@ -247,6 +309,14 @@ fn take() -> Counters {
 		warps_skipped: WARPS_SKIPPED.swap(0, Ordering::Relaxed),
 		presented: PRESENTED.swap(0, Ordering::Relaxed),
 		presented_unblended: PRESENTED_UNBLENDED.swap(0, Ordering::Relaxed),
+		present_gaps: PRESENT_GAPS.swap(0, Ordering::Relaxed),
+		present_gap_mean_ms: load(&PRESENT_GAP_MS),
+		present_gap_min_ms: load(&PRESENT_GAP_MIN_MS),
+		present_gap_max_ms: load(&PRESENT_GAP_MAX_MS),
+		present_duplicates: PRESENT_DUPLICATES.swap(0, Ordering::Relaxed),
+		present_t_mean: load(&PRESENT_T_SUM),
+		present_t_max: load(&PRESENT_T_MAX),
+		present_t_duplicates: PRESENT_T_DUPLICATES.swap(0, Ordering::Relaxed),
 		screen: *SCREEN.lock().unwrap_or_else(|error| error.into_inner()),
 		looking: LOOKING.load(Ordering::Relaxed) == 1,
 		aim_x: f32::from_bits(AIM_X.load(Ordering::Relaxed) as u32),
@@ -268,6 +338,11 @@ fn take() -> Counters {
 		&STEP_MS,
 		&STEP_MAX_MS,
 		&WAIT_MS,
+		&PRESENT_GAP_MS,
+		&PRESENT_GAP_MAX_MS,
+		&PRESENT_GAP_MIN_MS,
+		&PRESENT_T_SUM,
+		&PRESENT_T_MAX,
 	] {
 		store(cell, 0.0);
 	}
@@ -285,6 +360,16 @@ fn take() -> Counters {
 		0.0
 	} else {
 		counters.wait_ms / counters.waits as f64
+	};
+	counters.present_t_mean = if counters.presented == 0 {
+		0.0
+	} else {
+		counters.present_t_mean / counters.presented as f64
+	};
+	counters.present_gap_mean_ms = if counters.present_gaps == 0 {
+		0.0
+	} else {
+		counters.present_gap_mean_ms / counters.present_gaps as f64
 	};
 	counters
 }
@@ -345,6 +430,19 @@ pub fn report() {
 		counters.aim_y,
 		counters.screen,
 	);
+	if counters.present_gaps > 0 {
+		eprintln!(
+			"xops:   present gaps: mean {:.2}ms min {:.2} max {:.2} over {}, {} under 5ms | t mean {:.2} max {:.2}, {} repeats",
+			counters.present_gap_mean_ms,
+			counters.present_gap_min_ms,
+			counters.present_gap_max_ms,
+			counters.present_gaps,
+			counters.present_duplicates,
+			counters.present_t_mean,
+			counters.present_t_max,
+			counters.present_t_duplicates,
+		);
+	}
 	if let Some((x, y, distance, size)) = counters.view {
 		eprintln!(
 			"xops:   hud weapon: screen ({x:.0},{y:.0}) at {distance:.2} units, scale {size:.3}"

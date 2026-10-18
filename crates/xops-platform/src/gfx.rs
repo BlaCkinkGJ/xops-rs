@@ -361,14 +361,22 @@ impl Gfx {
 		let surface_config = surface.as_ref().map(|surface| {
 			let caps = surface.get_capabilities(&adapter);
 
-			// The game paces itself: it sleeps out what is left of each 30 ms frame and
-			// then draws. A present that also waits for the display puts the two out of
-			// step, because 30 ms is not a multiple of a 60 Hz refresh: the frame lands on
-			// the next refresh or the one after it, and the difference between the two
-			// reads as a stutter rather than a steady rate. So a mode that does not block
-			// is preferred, and vsync is what is left when the surface offers nothing else.
+			// Mailbox: the display takes the newest frame at each refresh and nothing waits.
+			//
+			// Both halves matter here. The loop has two jobs on one thread, the game's step
+			// and the frames drawn for the display between steps, and a present that waits for
+			// the display takes sixteen of the thirty milliseconds a step comes with -- so
+			// only one frame fits per step and the display is given 33 of the 60 it asked for.
+			// With a mailbox the present returns at once and the display picks the newest
+			// frame whenever it refreshes, which is its own cadence exactly and as even as the
+			// display is, whatever the loop is doing. Nothing tears either: a mailbox replaces
+			// the queued frame rather than swapping mid-frame.
+			//
+			// Fifo is the fallback, and behaves as that costs describes; an immediate present
+			// tears, but is at least even.
 			let present_mode = [
 				wgpu::PresentMode::Mailbox,
+				wgpu::PresentMode::Fifo,
 				wgpu::PresentMode::Immediate,
 			]
 			.into_iter()
@@ -658,7 +666,9 @@ impl Gfx {
 		self.previous_matched = self.previous_uniforms.len() == self.uniforms.len();
 		self.previous_uniforms.clone_from(&self.uniforms);
 
-		self.encode()
+		// Drawn, not shown: the host decides when the display gets a frame, and it may want
+		// one between this step and the next.
+		self.render_colour()
 	}
 
 	/// Uploads the uniforms for every draw, each at its own dynamic-offset slot.
@@ -710,13 +720,36 @@ impl Gfx {
 		Ok(true)
 	}
 
+	/// Draws the recorded frame into the colour target and shows it.
 	fn encode(&mut self) -> Result<(), String> {
 		let mut encoder = self
 			.device
 			.create_command_encoder(&wgpu::CommandEncoderDescriptor {
 				label: Some("frame"),
 			});
+		self.encode_commands(&mut encoder);
+		self.show_colour(encoder)
+	}
 
+	/// Draws the recorded frame into the colour target, and stops there.
+	///
+	/// The game draws once per step and a display wants frames between those steps, so the
+	/// drawing and the showing are two different things: this is the drawing, and
+	/// [`Gfx::present`] is the showing. Keeping them apart is what lets the display be given
+	/// frames on its own schedule rather than on the game's, which is what smoothness comes
+	/// down to when the two rates do not divide.
+	fn render_colour(&mut self) -> Result<(), String> {
+		let mut encoder = self
+			.device
+			.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+				label: Some("frame"),
+			});
+		self.encode_commands(&mut encoder);
+		self.queue.submit(Some(encoder.finish()));
+		Ok(())
+	}
+
+	fn encode_commands(&mut self, encoder: &mut wgpu::CommandEncoder) {
 		// Walk the recorded commands and open a pass wherever a clear appears. That is
 		// the whole trick: the game clears the depth buffer mid-frame on purpose, so a
 		// clear is a pass boundary and not just another command.
@@ -858,6 +891,10 @@ impl Gfx {
 			});
 		}
 
+	}
+
+	/// Copies the colour target to the surface and presents it.
+	fn show_colour(&mut self, mut encoder: wgpu::CommandEncoder) -> Result<(), String> {
 		if let (Some(surface), Some(_config)) = (&self.surface, &self.surface_config) {
 			match surface.get_current_texture() {
 				Ok(frame) => {

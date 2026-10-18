@@ -156,3 +156,20 @@ the two disagree.
   `get_current_texture` blocks, which is most of what a frame costs here, and how
   much input lag the queue adds: at two, a 30 ms game is up to 60 ms behind the
   mouse.
+- **A sub-frame wait on this system is not a wait.** `ControlFlow::WaitUntil` with
+  a period below about thirty milliseconds comes back after twenty or thirty
+  regardless, so anything that wants to happen between the game's steps cannot be
+  scheduled with it: it has to sleep in small slices and re-read the clock, which
+  is what `host::sleep_until` is for. This is the same timer coalescing that makes
+  a single `thread::sleep` lose most of its duration.
+- **The interpolation factor is measured against the step's schedule, not against
+  a clock started when the step ran.** The step costs a millisecond or two, so a
+  clock started with it runs out early and the factor passes one and then jumps
+  back to nought when the next step runs: the picture goes backwards once a step,
+  which is what a stutter is. Against `next_frame - frame_step()` it cannot, and
+  the trace shows the factor staying within nought to one with no repeats.
+- **The step draws, the host shows.** The game's step used to present its own
+  frame as well, which put an unblended frame at whatever phase it finished at in
+  the middle of the frames drawn for the display. `Gfx::end_frame` now draws into
+  the colour target and stops; `Gfx::present` is the only thing that shows a
+  frame.
