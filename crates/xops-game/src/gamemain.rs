@@ -5,8 +5,13 @@
 //! structures the menu and the debug console use. They are here rather than beside each
 //! screen because the header declares them once and every screen reads them.
 
+use crate::collision::Collision;
 use crate::config::Config;
 use crate::core::degree_to_radian;
+use crate::datafile::{BlockDataInterface, MIFInterface, PointDataInterface};
+use crate::parameter::ParameterInfo;
+use crate::resource::ResourceManager;
+use crate::soundmanager::SoundManager;
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -144,6 +149,41 @@ pub const CONSOLE_PROMPT: &[u8] = b">";
 // ---------------------------------------------------------------------------
 // Structures
 // ---------------------------------------------------------------------------
+
+/// The state that lives for a whole game session, shared by whichever screen is on screen.
+///
+/// Upstream these are file scope objects that `InitGame` fills in and `CleanupGame`
+/// empties, and the screens reach them through pointers. Here they are one structure that
+/// the scheduler owns and lends to the current screen, which is the faithful translation:
+/// a screen holds `&mut World` and reaches the mission through it, exactly as it reached
+/// the globals.
+///
+/// Only one screen exists at a time, which is what makes the borrow workable: the
+/// scheduler builds a screen when it enters `STATE_CREATE_*` and drops it at
+/// `STATE_DESTROY_*`, so there is never a second one holding the same borrow.
+///
+/// The collaborators that live longer than the world are held by reference. The resource
+/// manager is loaded once at startup and is read only from here on, and the sound manager
+/// borrows the sound class plus the resource and the setting tables, so bundling them here
+/// keeps a screen down to a single lifetime parameter.
+pub struct World<'a> {
+	/// The humans, weapons, small objects, bullets, grenades and effects.
+	pub objects: crate::objectmanager::ObjectManager,
+	pub block_data: BlockDataInterface,
+	pub point_data: PointDataInterface,
+	pub mif: Option<MIFInterface>,
+	pub collision: Collision,
+	/// The setting tables. A zero-sized handle, so a copy here costs nothing.
+	pub param: ParameterInfo,
+	/// The mission selection and its result. Upstream `GameInfoData`, which the menu fills
+	/// in, the game screen updates and the result screen reads after the game screen is
+	/// gone. That last part is why it belongs here rather than on the game screen.
+	pub game_info: GameInfo,
+	/// Loaded once at startup and only read afterwards, so a screen may share it.
+	pub resource: &'a ResourceManager,
+	/// Playback. Borrows the sound class, the resource and the setting tables.
+	pub sound: SoundManager<'a>,
+}
 
 /// `GameInfo`: what a mission reports when it ends.
 #[derive(Copy, Clone, Debug, PartialEq)]

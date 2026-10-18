@@ -33,3 +33,5 @@ pub mod sound;
 pub mod soundmanager;
 
 pub use core::*;
+
+pub mod briefing;
