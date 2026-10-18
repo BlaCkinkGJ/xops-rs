@@ -498,6 +498,18 @@ impl<'a> SoundManager<'a> {
 		newlists as i32
 	}
 
+	/// Reaches the device, which is the upstream `SoundCtrl->SetVolume(volume)` as called
+	/// from the options screen when the settings are saved.
+	///
+	/// The manager holds the only `&mut SoundControl`, so a screen that has the manager in
+	/// hand routes through it. Upstream the volume is set to zero when the sound flag is
+	/// off and to one when it is on, and the control clamps what it is given.
+	pub fn set_volume(&mut self, volume: f32) {
+		if let Some(sound_ctrl) = self.sound_ctrl.as_mut() {
+			sound_ctrl.set_volume(volume);
+		}
+	}
+
 	/// `SoundManager::PlayWorldSound`: play the sounds queued for the frame that just
 	/// ended. Called once per frame.
 	pub fn play_world_sound(
