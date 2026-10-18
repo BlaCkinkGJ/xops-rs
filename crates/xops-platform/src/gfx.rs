@@ -301,9 +301,9 @@ impl Gfx {
 					.as_ref()
 					.expect("checked")
 					.get_capabilities(&adapter);
-				// Prefer a non-sRGB target: the game writes 8-bit colours that it treats
-				// as final, and an sRGB target would apply a transfer curve the browser
-				// build never applied.
+				// Prefer a non-sRGB target: the game writes 8-bit colours that it treats as
+				// final, and an sRGB target would apply a transfer curve the original never
+				// applied.
 				caps.formats
 					.iter()
 					.copied()
@@ -316,12 +316,28 @@ impl Gfx {
 
 		let surface_config = surface.as_ref().map(|surface| {
 			let caps = surface.get_capabilities(&adapter);
+
+			// The game paces itself: it sleeps out what is left of each 30 ms frame and
+			// then draws. A present that also waits for the display puts the two out of
+			// step, because 30 ms is not a multiple of a 60 Hz refresh: the frame lands on
+			// the next refresh or the one after it, and the difference between the two
+			// reads as a stutter rather than a steady rate. So a mode that does not block
+			// is preferred, and vsync is what is left when the surface offers nothing else.
+			let present_mode = [
+				wgpu::PresentMode::Mailbox,
+				wgpu::PresentMode::Immediate,
+			]
+			.into_iter()
+			.find(|mode| caps.present_modes.contains(mode))
+			.unwrap_or(wgpu::PresentMode::AutoVsync);
+			eprintln!("xops: {width}x{height}, presenting with {present_mode:?}");
+
 			let config = wgpu::SurfaceConfiguration {
 				usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
 				format,
 				width,
 				height,
-				present_mode: wgpu::PresentMode::AutoVsync,
+				present_mode,
 				alpha_mode: caps.alpha_modes[0],
 				view_formats: vec![],
 				desired_maximum_frame_latency: 2,

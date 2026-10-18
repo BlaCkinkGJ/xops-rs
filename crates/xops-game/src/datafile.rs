@@ -213,6 +213,16 @@ pub fn path_from_bytes(fname: &[u8]) -> PathBuf {
 	}
 }
 
+/// Says which file a loader could not open.
+///
+/// The loaders return a flag, the flag travels up as one bit of an error code, and the
+/// message that finally reaches the user is "block data open failed", which names nothing.
+/// Without the path there is nothing to act on: the file may be missing, the directory may
+/// be the wrong one, or the game may be running somewhere else entirely.
+fn report_missing(fname: &[u8]) {
+	eprintln!("xops: {}: not found", path_from_bytes(fname).display());
+}
+
 fn read_file(fname: &[u8]) -> Option<Vec<u8>> {
 	// The game's data names its files in whatever case it was authored with, which is not
 	// necessarily the case on disk. See `xops_platform::path`.
@@ -441,6 +451,7 @@ impl BlockDataInterface {
 	/// `LoadFiledata`. Returns 0 on success, 1 on failure.
 	pub fn load_file_data(&mut self, fname: &[u8]) -> i32 {
 		let Some(file) = read_file(fname) else {
+			report_missing(fname);
 			return 1;
 		};
 		self.load_bd1(&file)
@@ -687,6 +698,7 @@ impl PointDataInterface {
 	/// `LoadFiledata`. Returns 0 on success, 1 on failure.
 	pub fn load_file_data(&mut self, fname: &[u8]) -> i32 {
 		let Some(file) = read_file(fname) else {
+			report_missing(fname);
 			return 1;
 		};
 

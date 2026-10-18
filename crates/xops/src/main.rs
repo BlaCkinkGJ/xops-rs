@@ -201,8 +201,41 @@ impl Shell {
 
 	/// The upstream preamble: the data directory, the configuration, the sound device and
 	/// the window, in the order the original does them.
+	/// Moves to the directory the data is in, when the game was started somewhere else.
+	///
+	/// Every path the game uses is relative, so a run started by double-clicking the
+	/// binary would look for `data` beside the desktop instead of beside itself. Both are
+	/// tried. Which one was chosen is printed either way, because that is the first
+	/// question any "it cannot find its data" report needs answered, and it is not visible
+	/// from the outside.
+	fn settle_working_directory(&mut self) {
+		let here = std::env::current_dir().unwrap_or_default();
+		if here.join("data").is_dir() {
+			eprintln!("xops: data in {}", here.join("data").display());
+			return;
+		}
+
+		if let Ok(executable) = std::env::current_exe() {
+			let directory = executable.parent().unwrap_or(Path::new(".")).to_path_buf();
+			if directory.join("data").is_dir() {
+				let _ = std::env::set_current_dir(&directory);
+				eprintln!("xops: data in {}", directory.join("data").display());
+				return;
+			}
+		}
+
+		eprintln!(
+			"xops: no data directory in {} and none beside the executable",
+			here.display()
+		);
+	}
+
+	/// The upstream preamble: the data directory, the configuration, the sound device and
+	/// the window, in the order the original does them.
 	fn prepare(&mut self, host: HostWindow) -> Result<(), String> {
-				if !Path::new("data").is_dir() {
+		self.settle_working_directory();
+
+		if !Path::new("data").is_dir() {
 			return Err("the data directory is missing. Copy the game data next to here".into());
 		}
 
