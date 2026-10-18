@@ -103,7 +103,8 @@ the `jpeg-decoder` and `png` crates.
 ## Naming
 
 Upstream asks that a modified build uses its own name rather than the OpenXOPS or
-*X operations* names, so this project goes by `xops` (the directory name) and
-describes itself as an unofficial port. It must not be presented as the
+*X operations* names, so this project goes by `xops` -- the crates, the binary and
+its own title -- in a repository named `xops-rs`, and describes itself as an
+unofficial port. It must not be presented as the
 official OpenXOPS, nor as a product of the OpenXOPS Project, of team MITEI, or of
 the authors of *X operations*.
