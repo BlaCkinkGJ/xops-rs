@@ -121,7 +121,11 @@ impl D3DGraphics {
 		};
 
 		// The extension first, then the file's own header, which overrides it.
-		let path = path_from_bytes(filename);
+		//
+		// The path is resolved once here because both the header read and the decode below
+		// open it, and the game's data names its files in whatever case it was authored
+		// with while the file on disk may differ. See `xops_platform::path`.
+		let path = xops_platform::path::resolve_case_insensitive(&path_from_bytes(filename));
 		let format = texture::check_texture_file_extension(filename, texture::FORMAT_UNKNOWN);
 		let format = texture::check_texture_file_type_flag(&file_head(&path), format);
 

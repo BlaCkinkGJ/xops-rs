@@ -512,7 +512,7 @@ mod tests {
 		// reports its reason and passes when it is not on the machine.
 		let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
 			.join("../../web/data/sound/can.wav");
-		let Ok(data) = std::fs::read(&path) else {
+		let Ok(data) = std::fs::read(crate::path::resolve_case_insensitive(&path)) else {
 			println!("skipping: {} is not present", path.display());
 			return;
 		};

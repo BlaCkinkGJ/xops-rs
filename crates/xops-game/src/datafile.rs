@@ -9,6 +9,8 @@
 //! Strings stay bytes because the texture font indexes glyphs by byte value.
 
 use std::fs;
+
+use xops_platform::path::resolve_case_insensitive;
 use std::path::{Path, PathBuf};
 
 use crate::core::{
@@ -197,7 +199,9 @@ pub fn path_from_bytes(fname: &[u8]) -> PathBuf {
 }
 
 fn read_file(fname: &[u8]) -> Option<Vec<u8>> {
-	fs::read(path_from_bytes(fname)).ok()
+	// The game's data names its files in whatever case it was authored with, which is not
+	// necessarily the case on disk. See `xops_platform::path`.
+	fs::read(resolve_case_insensitive(&path_from_bytes(fname))).ok()
 }
 
 /// Takes at most `n` bytes, ending the cursor at the end of the data.
@@ -1329,7 +1333,7 @@ impl AddonList {
 	/// The upstream pattern "*.mif" is matched by the Windows API, which does not
 	/// distinguish case, so neither does this.
 	fn get_mif_list(&mut self, dir: &[u8]) {
-		let Ok(entries) = fs::read_dir(path_from_bytes(dir)) else {
+		let Ok(entries) = fs::read_dir(resolve_case_insensitive(&path_from_bytes(dir))) else {
 			return;
 		};
 		for entry in entries.flatten() {
@@ -1444,7 +1448,7 @@ impl INIFileInterface {
 		if self.inifp.is_some() {
 			return true;
 		}
-		match fs::read(path) {
+		match fs::read(resolve_case_insensitive(path)) {
 			Ok(bytes) => {
 				self.inifp = Some(bytes);
 				false
@@ -1690,7 +1694,7 @@ pub fn check_file_extension(filepath: &[u8], checkstr: &[u8]) -> bool {
 
 /// `CheckDirectory`: does the directory exist?
 pub fn check_directory(dir: &[u8]) -> bool {
-	fs::metadata(path_from_bytes(dir)).is_ok()
+	fs::metadata(resolve_case_insensitive(&path_from_bytes(dir))).is_ok()
 }
 
 #[cfg(test)]

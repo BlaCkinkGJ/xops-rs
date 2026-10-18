@@ -104,7 +104,8 @@ pub fn check_texture_file_type_flag(data: &[u8], nowformat: i32) -> i32 {
 /// here is upstream's `return false` from a loader, which makes `LoadTexture` give up and
 /// the texture count as missing.
 pub fn decode(path: &Path, format: i32, black_transparent: bool) -> Result<DecodedTexture, String> {
-    let buf = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+	let buf = std::fs::read(crate::path::resolve_case_insensitive(path))
+		.map_err(|e| format!("{}: {e}", path.display()))?;
 
     match format {
         FORMAT_BMP => load_bmp_texture(&buf, black_transparent).map_err(|e| format!("{}: {e}", path.display())),

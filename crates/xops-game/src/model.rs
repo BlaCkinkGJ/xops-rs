@@ -91,7 +91,7 @@ impl ModelTable {
 	/// Loads a model file into the first free slot. Returns the slot, or -1 on failure,
 	/// which is the upstream contract the callers branch on.
 	pub fn load(&mut self, path: &std::path::Path) -> i32 {
-		let data = match std::fs::read(path) {
+		let data = match std::fs::read(xops_platform::path::resolve_case_insensitive(path)) {
 			Ok(data) => data,
 			Err(_) => return -1,
 		};

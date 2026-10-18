@@ -12,6 +12,7 @@ pub mod frame;
 pub mod gfx;
 pub mod host;
 pub mod input;
+pub mod path;
 pub mod sound;
 pub mod texture;
 pub mod window;
