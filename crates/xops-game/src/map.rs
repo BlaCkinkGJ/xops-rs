@@ -625,6 +625,22 @@ mod tests {
 	/// A model with three vertices, small enough that the test has to scale it up.
 	const MODEL_FILE: &str = "../../data/model/arm00.x";
 
+	/// Whether the game's own data is missing, which is the normal state of a checkout.
+	///
+	/// `data/` belongs to the original game and is not in this repository and must not be,
+	/// so a test that reads it cannot assume it is there. CI is the case this exists for:
+	/// the runner has none, and the eight tests below would fail for a reason that is not
+	/// a mistake in the code. They skip instead, and say so -- the message is visible
+	/// with `cargo test -- --nocapture`, which is what to run when a test seems not to
+	/// have done anything.
+	fn game_data_absent() -> bool {
+		if std::path::Path::new("../../data/map0/temp.bd1").is_file() {
+			return false;
+		}
+		eprintln!("skipped: the game's data is not beside this checkout");
+		true
+	}
+
 	fn headless() -> D3DGraphics {
 		let instance =
 			xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
@@ -742,6 +758,9 @@ mod tests {
 
 	#[test]
 	fn a_texture_takes_a_slot_and_gives_it_back() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		assert_eq!(graphics.get_total_textures(), 0);
 
@@ -791,6 +810,9 @@ mod tests {
 
 	#[test]
 	fn loading_a_map_loads_the_textures_it_names() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		graphics.load_mapdata(map_blocks(), MAP_DIR);
 
@@ -821,6 +843,9 @@ mod tests {
 
 	#[test]
 	fn a_map_whose_textures_are_missing_still_loads() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		graphics.load_mapdata(map_blocks(), b"../../data/map0/not_here/");
 
@@ -847,6 +872,9 @@ mod tests {
 
 	#[test]
 	fn the_map_draws_where_the_camera_looks() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		graphics.load_mapdata(map_blocks(), MAP_DIR);
 		camera_facing_the_map(&mut graphics, true);
@@ -861,6 +889,9 @@ mod tests {
 
 	#[test]
 	fn the_map_draws_nothing_when_the_camera_looks_away() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		graphics.load_mapdata(map_blocks(), MAP_DIR);
 		// The same camera on the other side of the map, looking away from it.
@@ -872,6 +903,9 @@ mod tests {
 
 	#[test]
 	fn the_wireframe_view_draws_the_block_edges() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		graphics.load_mapdata(map_blocks(), MAP_DIR);
 		camera_facing_the_map(&mut graphics, true);
@@ -888,6 +922,9 @@ mod tests {
 
 	#[test]
 	fn a_model_draws_with_the_colour_array_its_flag_picks() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		let id = graphics.load_model(Path::new(MODEL_FILE));
 		assert!(id >= 0, "a real model loads");
@@ -938,6 +975,9 @@ mod tests {
 
 	#[test]
 	fn a_board_is_a_quad_that_its_alpha_fades() {
+		if game_data_absent() {
+			return;
+		}
 		let mut graphics = headless();
 		let texture = graphics.load_texture(BMP_TEXTURE, false, false);
 		assert!(texture >= 0);
