@@ -221,3 +221,18 @@ the two disagree.
 - **A percentage that divides by a matrix entry is not a measurement.** The check on the
   blend reported 19703 percent on frames that were a few percent off, because the entries of
   a rotation pass through zero. It divides by the length of a basis row now.
+
+## What must never be committed
+
+- **No graphic, sound or mission file of the original game**, under any name, at any
+  size. `data/` is in `.gitignore` and has stayed out since the first commit, and the
+  history was audited by scanning every object it had ever held: the only images in it
+  were two 335 and 630 byte test fixtures this port generated. Keep it that way -- a
+  file added and later deleted is still in the repository.
+- **No third-party binary without its notice.** The libjpeg, libpng and zlib copies
+  the upstream archive bundles were removed for this reason: the port does not link
+  them, so carrying them meant carrying their notices or not being entitled to carry
+  the files. `vendor/openxops/` is upstream's *source* under 3-clause BSD, and its
+  own `LICENSE` says what is and is not included.
+- What is in the repository, what is not, and why is described in `README.md` and
+  `LICENSE.md`. If a change makes either of those untrue, the change is wrong.
