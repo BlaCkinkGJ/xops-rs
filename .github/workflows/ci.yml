@@ -1,0 +1,93 @@
+name: CI
+
+# What this checks, and why each part is here:
+#
+# - lint: the workspace stays warning-free. `AGENTS.md` calls that a rule, and clippy
+#   is the version of it that has opinions, so this is the gate that keeps it true.
+# - test: the suite. It is fast -- a couple of seconds -- and most of it builds a
+#   renderer, which is the point: a change to drawing is verified by running it.
+# - coverage: the same tests under instrumentation, with the report kept as an
+#   artifact and the summary in the log. There is no threshold on it on purpose: a
+#   number nobody agreed on, failing a build, teaches people to write tests for the
+#   number.
+# - check: the other two platforms type-check. There is no GPU on a hosted macOS or
+#   Windows runner, so the suite cannot run there, and that is what `AGENTS.md` says
+#   is verified for them: that nothing in the Rust is platform specific beyond the
+#   font paths.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run is not worth finishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: lint, test and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The renderer tests build a real adapter. A bare runner has none, and then they
+      # do not fail as one missing thing: `Gfx::new` returns an error and every test
+      # that wanted a renderer panics at its headless helper, which reads as fifty-three
+      # failures rather than one cause. The software driver is what makes them run.
+      - name: software Vulkan driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers
+
+      - name: lint
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: test
+        run: cargo test --workspace
+
+      - name: install the coverage tool
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: coverage
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+      - name: coverage summary
+        run: cargo llvm-cov report --summary-only
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: error
+
+  other-platforms:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: check every target
+        run: cargo check --workspace --all-targets
