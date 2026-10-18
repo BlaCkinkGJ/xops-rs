@@ -8,9 +8,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::CursorGrabMode;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::gfx::Gfx;
@@ -115,6 +114,18 @@ impl<A: App> ApplicationHandler for Host<A> {
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
 		self.app.init(&window, gfx);
+	}
+
+	/// The raw device events, which carry the mouse's own movement. They are a separate
+	/// callback because they are not about the window: a warp of the cursor produces window
+	/// events but never one of these.
+	fn device_event(
+		&mut self,
+		_event_loop: &ActiveEventLoop,
+		_device_id: DeviceId,
+		event: DeviceEvent,
+	) {
+		self.input.device_event(&event);
 	}
 
 	fn window_event(
@@ -225,13 +236,11 @@ impl<A: App> Host<A> {
 		let Some(window) = &self.window else {
 			return;
 		};
+		// Hidden while the game is looking, and nothing more. The game warps the cursor to
+		// the middle of the window every frame, so it cannot wander off, and the movement
+		// comes from the raw device events rather than from where the cursor ended up. A
+		// grab would only be a way for a platform to stop delivering those.
 		window.set_cursor_visible(!looking);
-		let mode = if looking {
-			CursorGrabMode::Confined
-		} else {
-			CursorGrabMode::None
-		};
-		let _ = window.set_cursor_grab(mode);
 	}
 
 	fn new(app: A) -> Host<A> {

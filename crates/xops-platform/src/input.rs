@@ -5,7 +5,7 @@
 //! movement clamped to the range a signed byte can hold. Keeping those three shapes
 //! here means the game's input layer ports without a translation table in the middle.
 
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, MouseButton, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Windows virtual-key codes. The game indexes its keyboard table with these, so the
@@ -172,13 +172,8 @@ impl Input {
 				}
 			}
 			WindowEvent::CursorMoved { position, .. } => {
-				let (x, y) = (position.x.round() as i32, position.y.round() as i32);
-				if self.captured {
-					self.delta_x += x - self.mouse_x;
-					self.delta_y += y - self.mouse_y;
-				}
-				self.mouse_x = x;
-				self.mouse_y = y;
+				self.mouse_x = position.x.round() as i32;
+				self.mouse_y = position.y.round() as i32;
 			}
 			WindowEvent::MouseInput { state, button, .. } => {
 				let index = match button {
@@ -199,6 +194,25 @@ impl Input {
 			}
 			_ => {}
 		}
+	}
+
+	/// Handles the raw device events, which is where the movement comes from.
+	///
+	/// The game warps the cursor to the middle of the window every frame and reads how far
+	/// it moved, the way the original's Windows input did. Reading the cursor's position for
+	/// that cannot work here: the warp is itself a move, so every frame carries the player's
+	/// movement and then the warp back, and the two cancel out. The raw motion is what the
+	/// mouse actually did, and no warp can disturb it, which is why the original's Raw Input
+	/// back end reads it too.
+	pub fn device_event(&mut self, event: &DeviceEvent) {
+		let DeviceEvent::MouseMotion { delta } = event else {
+			return;
+		};
+		if !self.captured {
+			return;
+		}
+		self.delta_x += delta.0.round() as i32;
+		self.delta_y += delta.1.round() as i32;
 	}
 
 	pub fn set_captured(&mut self, captured: bool) {
@@ -319,12 +333,11 @@ mod tests {
 	fn movement_is_clamped_to_a_signed_byte() {
 		let mut input = Input::default();
 		input.set_captured(true);
-		input.mouse_x = 0;
-		input.mouse_y = 0;
-		// A fast flick, larger than a byte can carry.
-		input.handle(&WindowEvent::CursorMoved {
-			device_id: unsafe { std::mem::zeroed() },
-			position: winit::dpi::PhysicalPosition::new(400.0, -300.0),
+		// A fast flick, larger than a byte can carry. It arrives as the mouse's own motion,
+		// which is where movement comes from: the cursor's position carries the game's warp
+		// of it as well, and the two cancel out.
+		input.device_event(&DeviceEvent::MouseMotion {
+			delta: (400.0, -300.0),
 		});
 		let (dx, dy) = input.take_mouse_movement(true);
 		assert_eq!(dx, 127);
@@ -336,11 +349,17 @@ mod tests {
 	#[test]
 	fn movement_is_not_accumulated_while_uncaptured() {
 		let mut input = Input::default();
+		// The mouse moved, but nothing is looking, so no movement is gathered.
+		input.device_event(&DeviceEvent::MouseMotion {
+			delta: (50.0, 50.0),
+		});
+		assert_eq!(input.take_mouse_movement(true), (0, 0));
+
+		// The cursor's position is kept regardless, because a menu reads that instead.
 		input.handle(&WindowEvent::CursorMoved {
 			device_id: unsafe { std::mem::zeroed() },
 			position: winit::dpi::PhysicalPosition::new(50.0, 50.0),
 		});
-		assert_eq!(input.take_mouse_movement(true), (0, 0));
 		assert_eq!(input.mouse_position(), (50, 50));
 	}
 

@@ -419,9 +419,9 @@ mod tests {
 	use super::*;
 	use crate::config::{Config, ControlKey, TOTAL_ControlKey};
 	use xops_platform::winit::dpi::PhysicalPosition;
-	use xops_platform::winit::event::WindowEvent;
+	use xops_platform::winit::event::{DeviceEvent, WindowEvent};
 
-	/// A cursor move, which is where the platform accumulates movement from.
+	/// A cursor move, which is where the cursor's position comes from.
 	fn move_cursor(x: f64, y: f64) -> WindowEvent {
 		WindowEvent::CursorMoved {
 			// The event is never routed anywhere, so the device it names is never read.
@@ -430,12 +430,21 @@ mod tests {
 		}
 	}
 
+	/// The mouse's own movement, which is where the platform accumulates movement from.
+	///
+	/// Not a cursor position: the game warps the cursor to the middle of the window every
+	/// frame, so the position carries that warp as well as what the player did, and the two
+	/// cancel out. This is the raw motion, and a warp cannot produce it.
+	fn mouse_motion(dx: f64, dy: f64) -> DeviceEvent {
+		DeviceEvent::MouseMotion { delta: (dx, dy) }
+	}
+
 	/// The upstream limit, and the reason the options screen has a switch for it.
 	#[test]
 	fn a_frame_of_mouse_movement_is_clamped_to_a_signed_byte() {
 		let mut platform = Input::default();
 		platform.set_captured(true);
-		platform.handle(&move_cursor(400.0, -300.0));
+		platform.device_event(&mouse_motion(400.0, -300.0));
 
 		let mut control = InputControl::new();
 		control.get_input_state(&mut platform, true);
@@ -451,7 +460,7 @@ mod tests {
 	fn the_limit_flag_off_leaves_the_frame_of_movement_alone() {
 		let mut platform = Input::default();
 		platform.set_captured(true);
-		platform.handle(&move_cursor(400.0, -300.0));
+		platform.device_event(&mouse_motion(400.0, -300.0));
 
 		let mut control = InputControl::new();
 		control.set_mouse_limit_flag(false);
@@ -615,16 +624,23 @@ mod tests {
 		// A looking frame says so, and the movement it brings is kept.
 		control.get_input_state(&mut platform, true);
 		assert!(platform.is_captured());
-		platform.handle(&move_cursor(12.0, -4.0));
+		platform.device_event(&mouse_motion(12.0, -4.0));
 		control.get_input_state(&mut platform, true);
 		assert_eq!(control.get_mouse_movement(), (12, -4));
 
-		// Back in a menu the flag goes with it, and the movement is dropped rather than
-		// held for the frame after.
+		// Back in a menu the flag goes with it: a menu reads the cursor's position, and the
+		// raw motion is not gathered at all, so nothing is held over for the frame after.
 		control.get_input_state(&mut platform, false);
 		assert!(!platform.is_captured());
-		platform.handle(&move_cursor(30.0, 8.0));
+		platform.device_event(&mouse_motion(30.0, 8.0));
 		control.get_input_state(&mut platform, false);
-		assert_eq!(control.get_mouse_movement(), (30, 8));
+		assert_eq!(control.get_mouse_movement(), (0, 0));
+
+		control.get_input_state(&mut platform, true);
+		assert_eq!(
+			control.get_mouse_movement(),
+			(0, 0),
+			"the menu's movement was not gathered, so a looking frame gets none of it"
+		);
 	}
 }

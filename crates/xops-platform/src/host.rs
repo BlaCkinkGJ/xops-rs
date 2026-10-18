@@ -103,6 +103,27 @@ pub fn operating_environment() -> OperatingEnvironment {
 	}
 }
 
+/// Sleeps for about this long.
+///
+/// A single long sleep is not reliable: macOS coalesces timers to save power, so a request
+/// for thirty milliseconds comes back after seventy or a hundred, and a game that paces
+/// itself with one runs at a third of its intended rate. Sleeping in small steps and looking
+/// at the clock between them keeps the total near what was asked for, because an over-long
+/// step simply ends the loop early.
+///
+/// The granularity is small enough to be accurate and large enough not to spin.
+pub fn sleep_millis(millis: u32) {
+	let step = std::time::Duration::from_millis(2);
+	let deadline = std::time::Instant::now() + std::time::Duration::from_millis(millis as u64);
+	loop {
+		let now = std::time::Instant::now();
+		if now >= deadline {
+			return;
+		}
+		std::thread::sleep((deadline - now).min(step));
+	}
+}
+
 /// The window, as much of it as the game's window code uses, the upstream `WindowControl`.
 ///
 /// It may have no window yet: upstream ran `ErrorInfo` before `InitWindow`, so the

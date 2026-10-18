@@ -11,7 +11,6 @@
 //! of the machine the game still reaches for.
 
 use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
-use std::time::Duration;
 
 use xops_platform::host::{self, HostWindow};
 
@@ -269,7 +268,9 @@ pub fn control_fps() -> bool {
 	let nowtime = get_time_ms();
 
 	if let Some(waittime) = frame_wait(nowtime, CTRL_PTIME.load(Ordering::Relaxed)) {
-		std::thread::sleep(Duration::from_millis(waittime as u64));
+		// Not `thread::sleep` directly: see `sleep_millis`, which explains why one long
+		// sleep drops most of its own duration on some platforms.
+		xops_platform::host::sleep_millis(waittime);
 		CTRL_PTIME.store(get_time_ms(), Ordering::Relaxed);
 		return true;
 	}
