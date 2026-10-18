@@ -2,7 +2,7 @@
 
 ## What this repository is
 
-An **unofficial** browser (WebAssembly, WebGL) port of OpenXOPS 1.080, the
+An **unofficial** port of OpenXOPS 1.080, the
 open-source remake of *X operations*. It is not the official OpenXOPS, it is not
 affiliated with the OpenXOPS Project, and it is not distributed under the
 OpenXOPS name.
@@ -58,7 +58,7 @@ Copyright (c) 2014-2023, OpenXOPS Project / [-_-;](mikan) All rights reserved.
 is retained in every file. The port's own edits to those files are additionally
 marked in the code with `#ifdef __EMSCRIPTEN__` and described in `README.md`.
 
-## The browser port
+## This port
 
 `crates/`, `xops.html`, `scripts/`, `missions/` and this file are released
 under the same 3-clause BSD terms, copyright (c) 2026 BlaCkinkGJ and contributors
@@ -66,14 +66,14 @@ of this port.
 
 ## Game data is not included
 
-This repository ships **no** game data: `web/data/` is git-ignored and the WASM
+This repository ships **no** game data: `data/` is git-ignored and the
 build is built without it. The graphics data of the original game is a separate
 work, and the upstream terms forbid redistributing it:
 
 * Do not bundle the *X operations* graphic data with a distribution of this port.
 * Users are expected to obtain *X operations* 0.96 themselves (freeware, by
   nine-two, distributed through <https://www.vector.co.jp/soft/win95/game/se284467.html>)
-  and copy its `data` folder into `web/data/`.
+  and copy its `data` folder into `data/`.
 
 The graphics data of *X operations* is copyright TENKUU, and the game itself is
 by nine-two. The upstream project is working from permission granted per project,
@@ -82,7 +82,7 @@ not from a blanket license, so treat that data as not redistributable.
 ## Third-party components named by the upstream sources
 
 The upstream sources reference two files by nine-two, neither of which this
-repository redistributes. The browser port replaces both of them.
+repository redistributes. This port replaces both of them.
 
 ```
 config4xops05.exe  (c) 2003-2006 nine-two
@@ -99,6 +99,6 @@ under their own licenses. That `lib/` directory is not part of this repository.
 
 Upstream asks that a modified build uses its own name rather than the OpenXOPS or
 *X operations* names, so this project goes by `xops` (the directory name) and
-describes itself as an unofficial browser port. It must not be presented as the
+describes itself as an unofficial port. It must not be presented as the
 official OpenXOPS, nor as a product of the OpenXOPS Project, of team MITEI, or of
 the authors of *X operations*.

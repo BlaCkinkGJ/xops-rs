@@ -14,7 +14,6 @@
 //! render difference is easier to find when nothing is moving.
 
 use std::path::{Path, PathBuf};
-#[cfg(not(target_arch = "wasm32"))]
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -125,8 +124,15 @@ impl Game {
 	}
 
 	/// One pass of the upstream loop: the screen's phase, then the frame rate control.
+	///
+	/// The two ways the run ends are the loop's own condition, so they are read before the
+	/// frame rather than after it. The state machine reaching `STATE_EXIT` is the game asking
+	/// to stop, and the close flag is a screen whose data did not load asking for the
+	/// `WM_QUIT` that `CloseWindow` posted upstream.
 	fn step(&mut self, input: &mut Input) -> bool {
-		if self.state.get_state() == xops_game::statemachine::State::STATE_EXIT {
+		if self.state.get_state() == xops_game::statemachine::State::STATE_EXIT
+			|| self.window.close_requested()
+		{
 			return false;
 		}
 
@@ -151,8 +157,7 @@ impl Game {
 
 	/// Renders the frame that has been recorded and hands the pixels back, for the
 	/// offscreen mode. The windowed mode presents it instead.
-	#[cfg(not(target_arch = "wasm32"))]
-	fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
+		fn frame_pixels(&mut self) -> Result<(u32, u32, Vec<u8>), String> {
 		self.d3dg.gfx_ref().read_frame()
 	}
 }
@@ -197,8 +202,7 @@ impl Shell {
 	/// The upstream preamble: the data directory, the configuration, the sound device and
 	/// the window, in the order the original does them.
 	fn prepare(&mut self, host: HostWindow) -> Result<(), String> {
-		#[cfg(not(target_arch = "wasm32"))]
-		if !Path::new("data").is_dir() {
+				if !Path::new("data").is_dir() {
 			return Err("the data directory is missing. Copy the game data next to here".into());
 		}
 
@@ -280,7 +284,6 @@ impl Drop for Shell {
 	}
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 struct Options {
 	/// Render this many frames offscreen and write them out, instead of opening a window.
 	frames: Option<u64>,
@@ -295,7 +298,6 @@ struct Options {
 	help: bool,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Default for Options {
 	fn default() -> Self {
 		Options {
@@ -310,7 +312,6 @@ impl Default for Options {
 	}
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn parse_args(args: &[String]) -> Result<Options, String> {
 	let mut options = Options::default();
 	let mut index = 0;
@@ -358,7 +359,6 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 	Ok(options)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn usage() -> &'static str {
 	"xops [options]
 
@@ -372,70 +372,6 @@ fn usage() -> &'static str {
 With no --frames, opens a window and runs the game."
 }
 
-/// A browser has no `main`: the page calls [`start`], which is what the module's own start
-/// hook runs. The binary target still needs one.
-#[cfg(target_arch = "wasm32")]
-fn main() {}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen::prelude::wasm_bindgen(start)]
-pub fn start() {
-	wasm_bindgen_futures::spawn_local(async {
-		if let Err(error) = start_web().await {
-			web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&error));
-		}
-	});
-}
-
-/// The web entry point. The page calls this once its canvas exists.
-///
-/// There are no arguments and no working directory in a browser, so what carries the
-/// command line's work here is the page's own address: `?mission=` names a mission to start
-/// straight into, and with none the game opens on the opening screen, the same two modes
-/// the desktop build has.
-#[cfg(target_arch = "wasm32")]
-async fn start_web() -> Result<(), String> {
-	use wasm_bindgen::JsCast;
-
-	let window = web_sys::window().ok_or("there is no window")?;
-	let document = window.document().ok_or("there is no document")?;
-	let canvas = document
-		.get_element_by_id("xops")
-		.ok_or("the page has no element named xops")?
-		.dyn_into::<web_sys::HtmlCanvasElement>()
-		.map_err(|_| "the element named xops is not a canvas")?;
-
-	let mission = window
-		.location()
-		.search()
-		.ok()
-		.and_then(|search| mission_from_query(&search));
-
-	// Everything the game reads, fetched once. The game's own loaders are synchronous and
-	// nothing in them can wait on a request, so the waiting happens here, before the first
-	// of them runs.
-	xops_platform::fs::preload().await?;
-
-	window::run_web(Shell::new(mission), canvas).await
-}
-
-/// The `mission=` value out of a query string, which is how a page names a mission.
-#[cfg(target_arch = "wasm32")]
-fn mission_from_query(search: &str) -> Option<PathBuf> {
-	for pair in search.trim_start_matches('?').split('&') {
-		let (key, value) = pair.split_once('=')?;
-		if key == "mission" {
-			let decoded = js_sys::decode_uri_component(value).ok()?;
-			return decoded
-				.as_string()
-				.map(PathBuf::from)
-				.filter(|path| !path.as_os_str().is_empty());
-		}
-	}
-	None
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
 	let args: Vec<String> = std::env::args().skip(1).collect();
 	let options = match parse_args(&args) {
@@ -475,7 +411,6 @@ fn main() -> ExitCode {
 
 /// Runs the game with no window. The frames are read back after each pass, which is only
 /// possible offscreen, so this is also the only mode that can show a frame as a file.
-#[cfg(not(target_arch = "wasm32"))]
 fn headless(options: &Options, frames: u64) -> Result<(), String> {
 	let out = options.out.as_ref().expect("checked in parse_args");
 	let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {

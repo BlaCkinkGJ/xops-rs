@@ -11,6 +11,8 @@
 /target/
 vendor/target/
 renderer/target/
+# macOS writes these wherever a directory is opened in Finder.
+.DS_Store
 __pycache__/
 *.pyc
 build/

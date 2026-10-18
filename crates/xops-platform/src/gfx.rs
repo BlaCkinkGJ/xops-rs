@@ -247,28 +247,6 @@ impl Gfx {
 		)
 	}
 
-	/// The same renderer for a page's canvas, which is what a browser build has instead of
-	/// a window.
-	///
-	/// Async because the two requests below cannot be blocked on there: the browser answers
-	/// them on its own schedule. Nothing after them waits on anything, which is why this is
-	/// the only part of the renderer that cannot be called from ordinary code.
-	#[cfg(target_arch = "wasm32")]
-	pub async fn new_web(
-		instance: &wgpu::Instance,
-		canvas: web_sys::HtmlCanvasElement,
-		width: u32,
-		height: u32,
-	) -> Result<Gfx, String> {
-		let surface = Some(
-			instance
-				.create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-				.map_err(|e| format!("create_surface: {e}"))?,
-		);
-		let (adapter, device, queue) = Self::request(instance, surface.as_ref()).await?;
-		Self::build(instance, surface, adapter, device, queue, width, height, None)
-	}
-
 	/// Asks for the adapter and the device. The one place the renderer waits.
 	async fn request(
 		instance: &wgpu::Instance,

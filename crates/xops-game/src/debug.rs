@@ -11,7 +11,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
-use web_time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// A plain note. `LOG_CHECK` upstream.
 pub const LOG_CHECK: i32 = 0;

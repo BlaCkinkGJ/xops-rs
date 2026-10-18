@@ -141,6 +141,12 @@ impl InputControl {
 			*key = if input.key(code) { 0x80 } else { 0x00 };
 		}
 
+		// Whether the mouse is being used to look is the game's answer and the platform
+		// cannot work it out: a menu wants the cursor's position and a player wants how far
+		// it moved. The platform gathers that movement only while it is told the game is
+		// looking, and the cursor itself follows the same flag.
+		input.set_captured(mousemode);
+
 		let (x, y) = input.mouse_position();
 		let (movement_x, movement_y) = input.take_mouse_movement(self.mouse_limit_flag && mousemode);
 		if mousemode {
@@ -574,5 +580,37 @@ mod tests {
 		assert_eq!(originalkeycode_to_dinputdef(-1), 0);
 		assert_eq!(originalkeycode_to_dinputdef(0x12), -1);
 		assert_eq!(originalkeycode_to_dinputdef(0x13), -2);
+	}
+
+	/// The frame that looks tells the platform to gather movement, and nothing else did.
+	///
+	/// The platform keeps how far the cursor moved only while it is told the game is looking,
+	/// because a menu reads the cursor's position instead. Nothing in the game ever told it,
+	/// so a player's mouse turned nothing at all: the game warped the cursor to the middle of
+	/// the screen every frame, the platform threw away every movement that came with it, and
+	/// the camera stayed where it was.
+	#[test]
+	fn the_frame_that_looks_tells_the_platform_to_gather_movement() {
+		let mut platform = Input::default();
+		let mut control = InputControl::new();
+
+		// A menu frame wants the cursor's position, so movement is not gathered.
+		control.get_input_state(&mut platform, false);
+		assert!(!platform.is_captured());
+
+		// A looking frame says so, and the movement it brings is kept.
+		control.get_input_state(&mut platform, true);
+		assert!(platform.is_captured());
+		platform.handle(&move_cursor(12.0, -4.0));
+		control.get_input_state(&mut platform, true);
+		assert_eq!(control.get_mouse_movement(), (12, -4));
+
+		// Back in a menu the flag goes with it, and the movement is dropped rather than
+		// held for the frame after.
+		control.get_input_state(&mut platform, false);
+		assert!(!platform.is_captured());
+		platform.handle(&move_cursor(30.0, 8.0));
+		control.get_input_state(&mut platform, false);
+		assert_eq!(control.get_mouse_movement(), (30, 8));
 	}
 }

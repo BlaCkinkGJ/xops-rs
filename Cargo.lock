@@ -310,16 +310,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console_error_panic_hook"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
-dependencies = [
- "cfg-if",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2896,10 +2886,6 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 name = "xops"
 version = "0.1.0"
 dependencies = [
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
  "wgpu",
  "xops-game",
  "xops-platform",
@@ -2910,7 +2896,6 @@ name = "xops-game"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",
- "web-time",
  "xops-platform",
 ]
 
@@ -2919,18 +2904,12 @@ name = "xops-platform"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "console_error_panic_hook",
  "cpal",
  "encoding_rs",
  "fontdue",
  "jpeg-decoder",
- "js-sys",
  "png",
  "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
  "wgpu",
  "winit",
 ]

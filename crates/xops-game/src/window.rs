@@ -258,14 +258,6 @@ static CTRL_PTIME: AtomicU32 = AtomicU32::new(0);
 /// for a 1 ms timer with `timeBeginPeriod`, which has no counterpart in the standard
 /// library and was commented out around the sleep anyway.
 pub fn control_fps() -> bool {
-	// The browser paces the loop itself, one frame per animation callback, and a wasm
-	// module cannot sleep without blocking the page for the whole wait. So there is nothing
-	// to wait out here, and the host's own frame step is what holds the rate.
-	if cfg!(target_arch = "wasm32") {
-		CTRL_PTIME.store(get_time_ms(), Ordering::Relaxed);
-		return false;
-	}
-
 	let nowtime = get_time_ms();
 
 	if let Some(waittime) = frame_wait(nowtime, CTRL_PTIME.load(Ordering::Relaxed)) {

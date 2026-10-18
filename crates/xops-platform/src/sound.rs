@@ -1,11 +1,10 @@
-//! `sound-ezds.cpp` and `port/sound-sdl2.cpp`: the mixer behind the game's sound class.
+//! `sound-ezds.cpp`: the mixer behind the game's sound class.
 //!
-//! Upstream reached the mixing through `ezds.dll`, and the browser port through SDL2's
-//! audio API. What the game asks of either is small and the same: decode one WAV at load
-//! time, play it at a volume, stop it, and keep a bounded number of overlapping voices.
-//! There is no panning and no 3D here, which is why `sound-ezds.cpp` leaves its pan
-//! calculation commented out and why `Play3DSound` applies the distance attenuation in the
-//! caller before it ever gets to the device.
+//! Upstream reached the mixing through `ezds.dll`. What the game asks of it is small:
+//! decode one WAV at load time, play it at a volume, stop it, and keep a bounded number of
+//! overlapping voices. There is no panning and no 3D here, which is why `sound-ezds.cpp`
+//! leaves its pan calculation commented out and why `Play3DSound` applies the distance
+//! attenuation in the caller before it ever gets to the device.
 //!
 //! [`Mixer`] is all of the mixing and needs no device, so a test fills a buffer by hand.
 //! [`SoundOutput`] is the part that needs the OS: it owns the stream and drains the mixer
@@ -19,11 +18,10 @@ pub const MAX_LOADSOUND: usize = 24;
 /// Overlapping one-shot voices.
 ///
 /// Upstream DirectSound duplicates the loaded buffer `MAX_SOUNDLISTS` (100) times per
-/// sound and refuses playback when all of them are busy. The browser port replaced that
-/// with one pool of 24 for the whole game, which is the amount of overlap the game's
-/// sounds ever produce. The pool is what bounds playback here: `MAX_SOUNDLISTS` and
-/// `MAX_SOUNDDIST` are the game's constants, declared in `xops_game::sound` where the
-/// attenuation that uses them lives.
+/// sound and refuses playback when all of them are busy. The whole game shares one pool of
+/// 24 instead, which is the amount of overlap the game's sounds ever produce. The pool is
+/// what bounds playback here: `MAX_SOUNDLISTS` and `MAX_SOUNDDIST` are the game's
+/// constants, declared in `xops_game::sound` where the attenuation that uses them lives.
 pub const SOUNDVOICES: usize = 24;
 
 /// Sample rate the mixer runs at when there is no device to ask.
@@ -62,7 +60,7 @@ impl Default for Voice {
 /// The software mixer: loaded sounds, the voice pool, and the sum of the two.
 ///
 /// `SoundControl` holds one of these upstream, and the manual has it instantiated exactly
-/// once, so nothing here is global as it was in the browser port.
+/// once, so nothing here is global.
 pub struct Mixer {
 	sample_rate: u32,
 	slots: [Slot; MAX_LOADSOUND],
@@ -225,12 +223,11 @@ fn get_4byte_little_endian(data: &[u8]) -> u32 {
 
 /// Decodes a RIFF/WAVE file into interleaved stereo samples at `rate`.
 ///
-/// Both upstream paths left this to a library (`SDL_LoadWAV` in the browser port, the DLL
-/// in the original), so there was nothing to port: this is a minimal reader. PCM 8 bit
-/// unsigned, PCM 16 bit signed and 32 bit IEEE float are supported, with any channel
-/// count and any sample rate, resampled with linear interpolation. Anything else (ADPCM,
-/// A-law, 24 bit) is refused, which is enough for the game's data: everything under
-/// `web/data/sound` is 16 bit mono PCM at 22050 Hz.
+/// Upstream left this to a library (the DLL), so there was nothing to port: this is a
+/// minimal reader. PCM 8 bit unsigned, PCM 16 bit signed and 32 bit IEEE float are
+/// supported, with any channel count and any sample rate, resampled with linear
+/// interpolation. Anything else (ADPCM, A-law, 24 bit) is refused, which is enough for the
+/// game's data: everything under `data/sound` is 16 bit mono PCM at 22050 Hz.
 ///
 /// The chunk walk skips over what it does not know, because the files carry other chunks
 /// (`fact` in `cco.wav`) and the `fmt` chunk is not always 16 bytes.
@@ -333,16 +330,11 @@ pub fn decode_wav(data: &[u8], rate: u32) -> Option<Vec<i16>> {
 ///
 /// Opening can fail, and a build or test machine has no device at all. That is not
 /// something the game can act on: the slot bookkeeping keeps working so the ids stay
-/// valid, and playback reports success without a stream, which is the shape
-/// `port/sound-sdl2.cpp:284` used for the browser's blocked WebAudio.
+/// valid, and playback reports success without a stream.
 pub struct SoundOutput {
 	mixer: Arc<Mutex<Mixer>>,
-	/// The device stream on the desktop, the browser's audio graph on the web. `None` is a
-	/// machine with no output at all.
-	#[cfg(not(target_arch = "wasm32"))]
+	/// The device stream, `None` on a machine with no output at all.
 	stream: Option<cpal::Stream>,
-	#[cfg(target_arch = "wasm32")]
-	web: Option<web::WebAudio>,
 }
 
 impl SoundOutput {
@@ -351,23 +343,11 @@ impl SoundOutput {
 	pub fn open() -> Self {
 		let mixer = Arc::new(Mutex::new(Mixer::new(SAMPLE_RATE)));
 
-		#[cfg(not(target_arch = "wasm32"))]
-		{
-			let stream = attach_device(&mixer);
-			if stream.is_none() {
-				eprintln!("[xops] no usable audio output device, sounds will not be heard");
-			}
-			return SoundOutput { mixer, stream };
+		let stream = attach_device(&mixer);
+		if stream.is_none() {
+			eprintln!("[xops] no usable audio output device, sounds will not be heard");
 		}
-
-		#[cfg(target_arch = "wasm32")]
-		{
-			let web = web::attach(&mixer);
-			if web.is_none() {
-				eprintln!("[xops] no usable audio output device, sounds will not be heard");
-			}
-			return SoundOutput { mixer, web };
-		}
+		SoundOutput { mixer, stream }
 	}
 
 	/// The rate the mixer runs at, which is the device's once a device was found.
@@ -400,14 +380,8 @@ impl SoundOutput {
 
 	/// Whether there is somewhere for the samples to go. A machine with no output device
 	/// still plays sounds into the mixer, because the game cannot act on the failure.
-	#[cfg(not(target_arch = "wasm32"))]
 	fn has_device(&self) -> bool {
 		self.stream.is_some()
-	}
-
-	#[cfg(target_arch = "wasm32")]
-	fn has_device(&self) -> bool {
-		self.web.is_some()
 	}
 
 	fn mixer(&self) -> MutexGuard<'_, Mixer> {
@@ -420,16 +394,11 @@ impl SoundOutput {
 impl Drop for SoundOutput {
 	fn drop(&mut self) {
 		self.mixer().stop_all();
-		#[cfg(target_arch = "wasm32")]
-		if let Some(web) = &self.web {
-			web.stop();
-		}
 	}
 }
 
 /// Opens the default device and hands its samples to `mixer`, returning the stream that
 /// keeps it running. `None` is any machine without an output device.
-#[cfg(not(target_arch = "wasm32"))]
 fn attach_device(mixer: &Arc<Mutex<Mixer>>) -> Option<cpal::Stream> {
 	use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -485,7 +454,6 @@ fn attach_device(mixer: &Arc<Mutex<Mixer>>) -> Option<cpal::Stream> {
 /// `scratch` is reused so the callback never allocates once it has warmed up. `T` is the
 /// device's sample type, and `FromSample` is what converts between them: `i16` is the
 /// mixer's own type, `f32` and `u16` the other two cpal hands out.
-#[cfg(not(target_arch = "wasm32"))]
 fn fill<T: cpal::Sample + cpal::FromSample<i16>>(
 	mixer: &Arc<Mutex<Mixer>>,
 	scratch: &mut Vec<i16>,
@@ -498,212 +466,11 @@ fn fill<T: cpal::Sample + cpal::FromSample<i16>>(
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Output, web
-// ---------------------------------------------------------------------------
-
-/// Audio output for the browser.
-///
-/// `wasm32-unknown-unknown` has no audio device and `cpal` has no backend for it, so the
-/// samples go to an `AudioContext` instead. The graph is one `ScriptProcessorNode` feeding
-/// the destination, and its callback is a plain copy out of a ring buffer: the callback
-/// runs on the browser's schedule and the mixer belongs to the game, so they meet at the
-/// ring and nowhere else. A timer on the game's side mixes into the ring, which is the
-/// web's version of the cpal callback the desktop drains the mixer from.
-#[cfg(target_arch = "wasm32")]
-mod web {
-	use std::cell::Cell;
-	use std::collections::VecDeque;
-	use std::rc::Rc;
-	use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
-
-	use wasm_bindgen::closure::Closure;
-	use wasm_bindgen::JsCast;
-	use web_sys::{AudioContext, AudioNode, AudioProcessingEvent};
-
-	use super::{Mixer, CHANNELS};
-
-	/// Samples the callback asks for per call. `createScriptProcessor` takes a power of two
-	/// between 256 and 16384.
-	const CALLBACK_SAMPLES: usize = 2048;
-	/// Samples the ring holds, which is the ceiling on how far ahead of the browser the
-	/// game is allowed to mix. Four callback buffers is a few frames at the game's own
-	/// rate, enough to ride out a timer that fires late.
-	const RING_SAMPLES: usize = 8192;
-	/// How full the mixer keeps the ring. Two callback buffers of headroom is what stops
-	/// the callback running dry while the mix is still being topped up.
-	const TARGET_SAMPLES: usize = 4096;
-	/// How often the mixer is asked for samples. Shorter than a callback so a late tick
-	/// still leaves the ring covered.
-	const PUMP_MS: i32 = 16;
-
-	/// Mixed samples the callback has not taken yet.
-	///
-	/// The mixer owns one side and the callback the other, and this is the only state they
-	/// share. A `static` because neither side owns the other: the callback is the browser's
-	/// and outlives any one call.
-	static RING: LazyLock<Mutex<VecDeque<i16>>> = LazyLock::new(|| Mutex::new(VecDeque::new()));
-
-	fn ring() -> MutexGuard<'static, VecDeque<i16>> {
-		RING.lock().unwrap_or_else(|e| e.into_inner())
-	}
-
-	/// Hands the callback the next `out.len()` samples. An under-run is silence, which is
-	/// what the browser plays when the game has not mixed quickly enough.
-	fn pull(out: &mut [i16]) {
-		let mut ring = ring();
-		let take = out.len().min(ring.len());
-		for (dst, src) in out[..take].iter_mut().zip(ring.drain(..take)) {
-			*dst = src;
-		}
-		out[take..].fill(0);
-	}
-
-	/// Mixes up to [`TARGET_SAMPLES`] into the ring, dropping the oldest samples if the
-	/// callback has fallen behind.
-	///
-	/// This is the same `Mixer::mix` call the desktop's device callback makes, on a timer
-	/// instead of on an audio thread, and it writes to the ring instead of a device buffer.
-	fn fill_ring(mixer: &Arc<Mutex<Mixer>>, scratch: &mut Vec<i16>) {
-		let mut ring = ring();
-		// Frames, not samples, are what the mixer advances a voice by, so the request is
-		// rounded down to a whole frame.
-		let want = (TARGET_SAMPLES.saturating_sub(ring.len())) & !(CHANNELS - 1);
-		if want == 0 {
-			return;
-		}
-		scratch.resize(want, 0);
-		mixer.lock().unwrap_or_else(|e| e.into_inner()).mix(scratch);
-		ring.extend(scratch.iter().copied());
-		while ring.len() > RING_SAMPLES {
-			ring.pop_front();
-		}
-	}
-
-	/// The browser's audio graph and the timer that feeds it.
-	pub(super) struct WebAudio {
-		context: AudioContext,
-		/// Held so the node's callback is not collected while it is still connected.
-		_process: Closure<dyn FnMut(AudioProcessingEvent)>,
-		_pump: Closure<dyn FnMut()>,
-		_pump_handle: i32,
-		_click_target: Option<web_sys::EventTarget>,
-		_click: Option<Closure<dyn FnMut()>>,
-	}
-
-	impl WebAudio {
-		/// Shuts the graph down: the timer stops, the resume listener is removed and the
-		/// context is closed, so nothing outlives the `SoundOutput`.
-		pub(super) fn stop(&self) {
-			if let Some(window) = web_sys::window() {
-				window.clear_interval_with_handle(self._pump_handle);
-			}
-			if let (Some(target), Some(click)) = (&self._click_target, &self._click) {
-				let _ = target.remove_event_listener_with_callback("click", click.as_ref().unchecked_ref());
-			}
-			let _ = self.context.close();
-		}
-	}
-
-	/// Builds the graph and returns it, or `None` when the page has no `AudioContext`.
-	pub(super) fn attach(mixer: &Arc<Mutex<Mixer>>) -> Option<WebAudio> {
-		let context = AudioContext::new().ok()?;
-		// The browser picks its own rate, and the mixer resamples on load, so it has to
-		// know the rate before the first sound is loaded.
-		mixer
-			.lock()
-			.unwrap_or_else(|e| e.into_inner())
-			.set_sample_rate(context.sample_rate() as u32);
-
-		// The mixer is 16 bit and the graph is float, so the callback converts on the way
-		// out. The buffers are reused across calls so the callback never allocates.
-		let mut scratch = vec![0i16; CALLBACK_SAMPLES];
-		let mut left: Vec<f32> = Vec::new();
-		let mut right: Vec<f32> = Vec::new();
-		let process = Closure::new(move |event: AudioProcessingEvent| {
-			let Ok(buffer) = event.output_buffer() else {
-				return;
-			};
-			let frames = buffer.length() as usize;
-			scratch.resize(frames * CHANNELS, 0);
-			pull(&mut scratch);
-
-			left.resize(frames, 0.0);
-			right.resize(frames, 0.0);
-			for i in 0..frames {
-				left[i] = scratch[i * CHANNELS] as f32 / 32768.0;
-				right[i] = scratch[i * CHANNELS + 1] as f32 / 32768.0;
-			}
-			let _ = buffer.copy_to_channel_with_start_in_channel(&left, 0, 0);
-			let _ = buffer.copy_to_channel_with_start_in_channel(&right, 1, 0);
-		});
-
-		let node = context
-			.create_script_processor_with_buffer_size_and_number_of_input_channels_and_number_of_output_channels(
-				CALLBACK_SAMPLES as u32,
-				1,
-				CHANNELS as u32,
-			)
-			.ok()?;
-		node.set_onaudioprocess(Some(process.as_ref().unchecked_ref()));
-		let destination: AudioNode = context.destination().unchecked_into();
-		node.connect_with_audio_node(&destination).ok()?;
-
-		let pump_mixer = Arc::clone(mixer);
-		let mut pump_scratch: Vec<i16> = Vec::new();
-		let pump = Closure::new(move || fill_ring(&pump_mixer, &mut pump_scratch));
-		let pump_handle = web_sys::window()?
-			.set_interval_with_callback_and_timeout_and_arguments_0(
-				pump.as_ref().unchecked_ref(),
-				PUMP_MS,
-			)
-			.ok()?;
-
-		let (click_target, click) = resume_on_first_click(&context);
-
-		Some(WebAudio {
-			context,
-			_process: process,
-			_pump: pump,
-			_pump_handle: pump_handle,
-			_click_target: click_target,
-			_click: click,
-		})
-	}
-
-	/// Resumes the context on the first click on the canvas.
-	///
-	/// A context created without a user gesture starts suspended, so the browser will not
-	/// run the graph until the page has been clicked. That is the browser's rule for
-	/// autoplaying sound, not the game's design, and one click is enough for the session.
-	fn resume_on_first_click(context: &AudioContext) -> (Option<web_sys::EventTarget>, Option<Closure<dyn FnMut()>>) {
-		let Some(canvas) = web_sys::window()
-			.and_then(|window| window.document())
-			.and_then(|document| document.query_selector("canvas").ok().flatten())
-		else {
-			return (None, None);
-		};
-
-		let context = context.clone();
-		let resumed = Rc::new(Cell::new(false));
-		let click = Closure::new(move || {
-			if resumed.replace(true) {
-				return;
-			}
-			let _ = context.resume();
-		});
-
-		let target: web_sys::EventTarget = canvas.unchecked_into();
-		let _ = target.add_event_listener_with_callback("click", click.as_ref().unchecked_ref());
-		(Some(target), Some(click))
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	/// A PCM 16 bit WAV, little endian, the shape every file under `web/data/sound` has.
+	/// A PCM 16 bit WAV, little endian, the shape every file under `data/sound` has.
 	fn pcm16_wav(samples: &[i16], channels: u16, rate: u32) -> Vec<u8> {
 		let data_len = (samples.len() * 2) as u32;
 		let mut out = Vec::new();

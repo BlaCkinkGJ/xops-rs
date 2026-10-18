@@ -17,26 +17,7 @@ xops-game = { path = "crates/xops-game" }
 
 bytemuck = { version = "1", features = ["derive"] }
 pollster = "0.4"
-# The webgl feature is what makes the browser build work without WebGPU: the game was
-# written against a fixed function pipeline and a WebGL2 context is enough for it.
-wgpu = { version = "24", features = ["webgl"] }
-# winit hands the event loop a web-time clock on the web and std's on the desktop, and
-# web-time is that same type on both: std's on native, performance.now on the web.
-web-time = "1"
-
-# The web build's bindings. winit and wgpu both need wasm-bindgen, so the version is
-# whatever they resolve to.
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
-web-sys = { version = "0.3", features = [
-	"Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "Location", "console",
-	"XmlHttpRequest", "XmlHttpRequestResponseType", "Response",
-	"AudioContext", "AudioBuffer", "AudioBufferSourceNode", "GainNode",
-	"ScriptProcessorNode", "AudioNode", "AudioDestinationNode", "BaseAudioContext",
-	"EventTarget", "AudioProcessingEvent",
-] }
-console_error_panic_hook = "0.1"
+wgpu = "24"
 winit = "0.30"
 
 [profile.release]

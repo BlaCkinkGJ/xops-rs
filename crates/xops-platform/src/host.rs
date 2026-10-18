@@ -8,7 +8,7 @@
 //! draws without naming a wgpu type.
 
 use std::sync::{Arc, LazyLock};
-use web_time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use winit::dpi::PhysicalPosition;
 use winit::window::{Fullscreen, Window};

@@ -20,8 +20,6 @@ the two disagree.
 | `crates/xops-platform/` | Everything that touches the OS: window, input, audio, files, fonts, the renderer |
 | `data/` | The game's data. Not in git, must not be redistributed |
 | `missions/` | Two example missions, our own |
-| `web/` | The optional browser build: its page, and the scripts' output |
-| `scripts/` | The web build. The desktop build is plain cargo |
 | `vendor/openxops/` | The upstream sources, kept as the reference for behaviour |
 
 ## Rules
@@ -38,9 +36,6 @@ the two disagree.
   paths are Shift-JIS bytes with backslash separators. Unix gets those bytes
   unchanged, Windows gets them decoded, both get the slash. A `Path` built
   anywhere else will not resolve on Linux.
-- **`web_time`, not `std::time`.** `std`'s clock and `Instant` are unimplemented
-  on the web target and panic rather than returning something wrong, which costs
-  an afternoon because the panic names the allocation, not the caller.
 - **No new dependency without a reason that survives being written down.**
   `xops-game` builds on the platform crate and nothing else, and that is worth
   keeping.
@@ -52,8 +47,6 @@ the two disagree.
 
 - `cargo test --workspace` is the suite, and it is fast. `cargo check --workspace
   --all-targets` must stay warning-free, on every target.
-- `cargo check -p xops --target wasm32-unknown-unknown` is the web build's gate,
-  and `scripts/build_web.sh` builds it for real.
 - **Verify by running it, not by reading the diff.** A change to rendering or the
   frame loop means launching the game; a change to a loader means loading a
   mission. `--frames N --out DIR` renders offscreen, which is how a difference
@@ -68,16 +61,23 @@ the two disagree.
   world is 130 KB, and a debug build gives every moved temporary its own stack
   slot, so a dozen copies in one function's arms came to seven megabytes of
   frame. Box it. The release build hid this for a while.
-- **A screenshot of a WebGL canvas comes back empty** unless the drawing buffer
-  is preserved, so pixel checks on the browser build have to go through the
-  compositor's screenshot rather than a canvas readback.
-- **winit's web backend does not deliver the size the canvas actually has.** The
-  canvas is created at the page's size and the platform resizes it to the window,
-  so the loop tells the app once the window exists. Anything that reads the size
-  before that sees the page's.
 - **Upstream drops the depth test for the effect pass in the OpenGL backend and
   only drops the depth writes in the DirectX one.** The port keeps the test.
   Rendering the two the same way makes effects show through walls.
+- **A screen that fails to load its data does not advance the state machine.** Its
+  `create` returns early, before the click that would carry the state forward, so
+  nothing is processed until something ends the run. What ends it is
+  `WindowControl::close_requested`, which is the loop's own condition because that
+  is the `WM_QUIT` upstream's `CloseWindow` posted. Without it the screen is rebuilt
+  every frame and the same error is printed thirty times a second, which is what a
+  real report looked like: hundreds of `block data open failed` lines, a window that
+  answered nothing, and no clue which of the two was the cause.
+- **The platform gathers mouse movement only while the game says it is looking.**
+  `InputControl::get_input_state(input, mousemode)` is what says it, and a menu
+  passes false because it wants the cursor's position instead. Nothing else sets
+  that flag: leave it out and the game warps the cursor to the middle of the screen
+  every frame while the platform drops every movement that comes with it, so the
+  mouse turns nothing and the tests still pass, because they set the flag by hand.
 - **The camera angle that looks like it should be negative is not.** `rx` in the
   debug overlay is positive, and reading that glyph as a minus cost a detour.
   When a matrix is available, compare against the matrix.

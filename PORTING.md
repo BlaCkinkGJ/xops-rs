@@ -19,11 +19,12 @@ that forty translation units written in parallel come out as one program.
   `2.2`, and a constant named in the upstream headers keeps its name.
 - **The 30 ms frame step.** `GAMEFRAMEMS` is 30, so the world advances by a fixed step and
   the display does not change it.
-- **The uniform block is 176 bytes**: two `mat4x4`, then three `vec4`. The browser port's
-  recorder writes that block and the parity harness compares against it.
-- **`glFrontFace` maps straight through** to the front face, with no inversion. That was
-  settled by rendering in the browser port and by the culling test here. The argument
-  from window coordinates against framebuffer coordinates says otherwise and is wrong.
+- **The uniform block is 176 bytes**: two `mat4x4`, then three `vec4`. The layout was fixed
+  before the renderer was written and every draw depends on it.
+- **`glFrontFace` maps straight through** to the front face, with no inversion. The
+  argument from window coordinates against framebuffer coordinates says otherwise and is
+  wrong: both APIs put NDC +y at the top of the target, so the handedness already agrees.
+  The culling test is what holds this.
 - **Client arrays only.** The game issues every draw as `glVertexPointer` plus
   `glDrawArrays`; there is no immediate mode to support.
 
@@ -103,7 +104,7 @@ They are passed as part of a context struct rather than made `static mut`.
 
 - `cargo test --workspace` runs the renderer tests, which read pixels back and check where
   geometry landed. They run headless.
-- `cargo run -p xops -- --frames N --out DIR` writes frames to PNG. That is the comparison
-  input for the browser build's frames, and `renderer/compare.py` is the harness.
+- `cargo run -p xops -- --frames N --out DIR` writes frames to PNG, which is how a change
+  to rendering gets looked at and compared rather than described.
 - Behaviour differences are found by playing, not by reading a diff. A mission that loads
   and can be walked through is the bar.

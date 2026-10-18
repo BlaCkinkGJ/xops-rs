@@ -5,11 +5,12 @@
 //! is simulated for. That is the same contract the upstream loop had with `timeGetTime`.
 
 use std::sync::Arc;
-use web_time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::CursorGrabMode;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::gfx::Gfx;
@@ -51,14 +52,9 @@ struct Host<A: App> {
 	input: Input,
 	next_frame: Instant,
 	frames: u64,
-	/// The window attributes, which a browser build has to hand over ready made because the
-	/// canvas comes from the page rather than from the platform.
-	#[cfg(target_arch = "wasm32")]
-	attributes: Option<WindowAttributes>,
-	/// The renderer, made before the loop starts. Requesting a device needs an await, and
-	/// nothing inside the event loop can wait for one.
-	#[cfg(target_arch = "wasm32")]
-	gfx: Option<Gfx>,
+	/// Whether the cursor is currently kept in the window. Tracked so the platform is only
+	/// told when it changes.
+	cursor_captured: bool,
 }
 
 impl<A: App> ApplicationHandler for Host<A> {
@@ -67,15 +63,9 @@ impl<A: App> ApplicationHandler for Host<A> {
 			return;
 		}
 
-		#[cfg(not(target_arch = "wasm32"))]
 		let attributes = WindowAttributes::default()
 			.with_title("xops")
 			.with_inner_size(winit::dpi::LogicalSize::new(640.0, 480.0));
-		#[cfg(target_arch = "wasm32")]
-		let attributes = self
-			.attributes
-			.take()
-			.expect("run_web sets the attributes before it starts the loop");
 		let window = match event_loop.create_window(attributes) {
 			Ok(window) => Arc::new(window),
 			Err(error) => {
@@ -85,7 +75,6 @@ impl<A: App> ApplicationHandler for Host<A> {
 			}
 		};
 
-		#[cfg(not(target_arch = "wasm32"))]
 		let gfx = {
 			let size = window.inner_size();
 			let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -107,22 +96,11 @@ impl<A: App> ApplicationHandler for Host<A> {
 				}
 			}
 		};
-		#[cfg(target_arch = "wasm32")]
-		let gfx = self.gfx.take().expect("run_web builds the renderer");
 
 		window.request_redraw();
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
 		self.app.init(&window, gfx);
-
-		// The desktop built its renderer from the window's size a moment ago. The web one
-		// was built from the canvas the page had before the platform took it over and sized
-		// it to the window, so this is where it learns the size it actually has.
-		#[cfg(target_arch = "wasm32")]
-		{
-			let size = window.inner_size();
-			self.app.resized(size.width.max(1), size.height.max(1));
-		}
 	}
 
 	fn window_event(
@@ -173,72 +151,59 @@ impl<A: App> ApplicationHandler for Host<A> {
 			self.next_frame = Instant::now() + frame_step();
 		}
 
+		self.sync_cursor();
+
 		if let Some(window) = &self.window {
 			window.request_redraw();
 		}
 
-		// The desktop is told when the next frame is due so it can sleep until then. A page
-		// cannot sleep, and winit's web loop only runs a frame when the browser hands it one,
-		// so over there the loop polls and the animation callbacks are what pace it.
-		#[cfg(not(target_arch = "wasm32"))]
 		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
 }
 
 impl<A: App> Host<A> {
+	/// Keeps the cursor in the window while the game is using it to look.
+	///
+	/// The game warps the cursor to the middle of its own screen every frame and reads how
+	/// far it moved, which is how the original did it. Two things have to go with that: the
+	/// cursor must stay inside the window, or it reaches an edge and the look stops, and it
+	/// must be invisible, or it sits in the middle of the screen. A menu wants neither, and
+	/// the game says which it is by the flag it sets each frame, so this follows it.
+	///
+	/// A grab can be refused, on a platform or a session that will not allow it. That is not
+	/// fatal: the cursor is simply visible and free, and the game still runs.
+	fn sync_cursor(&mut self) {
+		let looking = self.input.is_captured();
+		if looking == self.cursor_captured {
+			return;
+		}
+		self.cursor_captured = looking;
+
+		let Some(window) = &self.window else {
+			return;
+		};
+		window.set_cursor_visible(!looking);
+		let mode = if looking {
+			CursorGrabMode::Confined
+		} else {
+			CursorGrabMode::None
+		};
+		let _ = window.set_cursor_grab(mode);
+	}
+
 	fn new(app: A) -> Host<A> {
 		Host {
 			app,
-			#[cfg(target_arch = "wasm32")]
-			attributes: None,
-			#[cfg(target_arch = "wasm32")]
-			gfx: None,
 			window: None,
 			input: Input::default(),
 			next_frame: Instant::now(),
 			frames: 0,
+			cursor_captured: false,
 		}
 	}
 }
 
 /// Runs the window until the app quits or the window closes.
-/// Runs the game in a page, drawing into the canvas the page provides.
-///
-/// Separate from [`run`] because a browser will not let anything block on the device
-/// request: this is the one entry point that has to be awaited, and it makes the renderer
-/// before the event loop starts so that nothing inside the loop has to wait.
-#[cfg(target_arch = "wasm32")]
-pub async fn run_web<A: App>(
-	app: A,
-	canvas: web_sys::HtmlCanvasElement,
-) -> Result<(), String> {
-	use winit::platform::web::WindowAttributesExtWebSys;
-
-	console_error_panic_hook::set_once();
-
-	let width = canvas.width().max(1);
-	let height = canvas.height().max(1);
-	let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-		backends: wgpu::Backends::all(),
-		..Default::default()
-	});
-	let gfx = Gfx::new_web(&instance, canvas.clone(), width, height).await?;
-
-	let mut host = Host::new(app);
-	host.attributes = Some(
-		WindowAttributes::default()
-			.with_canvas(Some(canvas))
-			.with_inner_size(winit::dpi::LogicalSize::new(width, height)),
-	);
-	host.gfx = Some(gfx);
-
-	let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
-	event_loop.set_control_flow(ControlFlow::Poll);
-	event_loop
-		.run_app(&mut host)
-		.map_err(|e| format!("event loop: {e}"))
-}
-
 pub fn run<A: App>(app: A) -> Result<(), String> {
 	let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
 	event_loop.set_control_flow(ControlFlow::Wait);

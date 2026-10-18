@@ -112,6 +112,36 @@ has, so the subset those two use is reimplemented on wgpu: `glBegin`-style draw
 calls, the matrix stacks, the blend and cull states, the texture formats the game
 loads. The game code above it calls the same functions it always did.
 
+### Why wgpu
+
+The graphics API is **wgpu**, and it is the whole of the engine: there is no scene
+graph, no asset pipeline and no game loop of its own, because the game already has
+all three and they are upstream's. What was needed is only what a platform layer
+needs, a way to put triangles on the screen of whichever machine this is running
+on.
+
+- **It is the native API, not a browser one.** wgpu speaks Vulkan on Linux and
+  Windows, Metal on macOS, and Direct3D 12 on Windows, whichever the driver
+  offers. There is no WebGL or WebGPU anywhere in this build, and no browser.
+- **It is the only cross-platform GPU API with first-class Rust support**, which
+  matters because the whole game is Rust and the alternative is a C++ engine with
+  a binding layer in front of it.
+- **It is a thin abstraction.** The alternative candidates are engines: Bevy,
+  Fyrox and the like bring their own ECS, their own asset system and their own
+  opinions about how a frame is built. This game has all of that already, ported
+  from upstream, and adopting an engine would mean rewriting it.
+- **It costs nothing at build time.** One Cargo dependency, no SDK to install and
+  no C toolchain beyond the one Rust already uses.
+- **Its output was checked against the reference renderer** before this port grew
+  the rest of the game, on identical recorded input, which is how the draw
+  ordering, the winding and the uniform layout came to be trusted.
+
+If a different choice were wanted, the seam is small and deliberate: everything
+above `xops-platform`'s `gfx` module calls GL-shaped functions, so a different
+backend would be a second implementation of that module rather than a rewrite of
+the game.
+
+
 ## Frame
 
 ```mermaid
@@ -144,8 +174,7 @@ the Rust is platform specific beyond the font paths, which all three have.
 ## Known limitations
 
 - **Sound is wired but not verified by ear.** The mixer, the cue lists and the
-  device output all run, and the browser build's audio graph is confirmed alive,
-  but nobody has listened to the desktop build on hardware.
+  device output all run, but nobody has listened to them on hardware.
 - `config.dat` is written where the game runs, so a read-only directory means
   settings do not persist. The game still starts with its defaults.
 - A system font is looked up by path for the Japanese in the menus and weapon
