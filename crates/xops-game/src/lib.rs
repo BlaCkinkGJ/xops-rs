@@ -17,6 +17,7 @@ pub mod input;
 pub mod map;
 pub mod model;
 pub mod object;
+pub mod objectmanager;
 pub mod effects;
 pub mod weapon;
 pub mod parameter;

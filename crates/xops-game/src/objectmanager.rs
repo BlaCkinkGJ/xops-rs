@@ -58,10 +58,10 @@ use crate::object::{
 	SMALLOBJECT_DAMAGE_GRENADE,
 };
 use crate::parameter::{
-	ParameterInfo, ID_WEAPON_GRENADE, ID_WEAPON_NONE, TOTAL_PARAMETERINFO_HUMAN,
+	ParameterInfo, ID_WEAPON_GRENADE, ID_WEAPON_NONE, SMALLOBJECT_SCALE, TOTAL_PARAMETERINFO_HUMAN,
 	TOTAL_PARAMETERINFO_SMALLOBJECT, TOTAL_PARAMETERINFO_WEAPON,
 };
-use crate::resource::{ResourceManager, TOTAL_ARMMODE, TOTAL_RUNMODE, TOTAL_UPMODE, TOTAL_WALKMODE};
+use crate::resource::ResourceManager;
 use crate::soundmanager::SoundManager;
 use crate::weapon::Weapon;
 use crate::window::get_rand;
@@ -578,7 +578,7 @@ impl ObjectManager {
 		let (upmodel, armmodel, legmodel, walkmodel, runmodel) = resource.get_human_model();
 
 		let mut px = data.x;
-		let mut py = data.y;
+		let py = data.y;
 		let mut pz = data.z;
 		let mut rx = data.r;
 		if random_flag {
@@ -630,8 +630,8 @@ impl ObjectManager {
 		if let Some(human_param) = human_param {
 			// Weapon B, as a virtual weapon.
 			let mut weapon = [None; TOTAL_HAVEWEAPON];
-			let mut lnbslist = [0; TOTAL_HAVEWEAPON];
-			let mut nbslist = [0; TOTAL_HAVEWEAPON];
+			let lnbslist = [0; TOTAL_HAVEWEAPON];
+			let nbslist = [0; TOTAL_HAVEWEAPON];
 
 			let mut weapon_index_id = self.add_visual_weapon_index(human_param.weapon[0], true, d3dg, resource);
 			if weapon_index_id != -1 {
@@ -652,8 +652,6 @@ impl ObjectManager {
 				nbslist,
 				&mut self.weapon_index,
 			);
-			let _ = &mut lnbslist;
-			let _ = &mut nbslist;
 		}
 
 		self.init_human_shot_counters(human_index_id);
@@ -754,8 +752,6 @@ impl ObjectManager {
 				&mut self.weapon_index,
 			);
 		}
-
-		self.init_human_shot_counters(human_index_id);
 
 		let player_team_id = self.player_team_id();
 		self.object_log
@@ -973,8 +969,8 @@ impl ObjectManager {
 		count: i32,
 	) -> i32 {
 		for i in 0..MAX_EFFECT {
-			if !self.effect_index[i].enable_flag() {
-				self.effect_index[i].set_pos_data(pos_x, pos_y, pos_z, 0.0);
+			if !self.effect_index[i].object.enable_flag() {
+				self.effect_index[i].object.set_pos_data(pos_x, pos_y, pos_z, 0.0);
 				self.effect_index[i].set_param_data(
 					move_x,
 					move_y,
@@ -988,7 +984,7 @@ impl ObjectManager {
 					settype,
 				);
 				self.effect_index[i].set_texture(texture, brightness, addbrightness, alpha, addalpha);
-				self.effect_index[i].set_enable_flag(true);
+				self.effect_index[i].object.set_enable_flag(true);
 				return i as i32;
 			}
 		}
@@ -1027,8 +1023,8 @@ impl ObjectManager {
 		let ry = vy.atan2((vx * vx + vz * vz).sqrt()) * -1.0;
 
 		for i in 0..MAX_EFFECT {
-			if !self.effect_index[i].enable_flag() {
-				self.effect_index[i].set_pos_data(pos_x, pos_y, pos_z, 0.0);
+			if !self.effect_index[i].object.enable_flag() {
+				self.effect_index[i].object.set_pos_data(pos_x, pos_y, pos_z, 0.0);
 				self.effect_index[i].set_param_data(
 					0.0,
 					0.0,
@@ -1043,7 +1039,7 @@ impl ObjectManager {
 				);
 				self.effect_index[i].set_rx_ry(rx, ry);
 				self.effect_index[i].set_texture(texture, brightness, addbrightness, alpha, addalpha);
-				self.effect_index[i].set_enable_flag(true);
+				self.effect_index[i].object.set_enable_flag(true);
 				return i as i32;
 			}
 		}
@@ -1389,7 +1385,7 @@ impl ObjectManager {
 
 				if collide_sphere_inside(ox, oy, oz, decide, bvx, bvy, bvz) {
 					let attack2 = (attacks as f32 * 0.25).floor() as i32;
-					self.hit_bullet_small_object(i, bvx, bvy, bvz, attack2, teamid, mif, sound);
+					self.hit_bullet_small_object(i, bvx, bvy, bvz, attack2, teamid, mif, resource, sound);
 
 					attacks = (attacks as f32 * 0.7).floor() as i32;
 					collide_flag = true;
@@ -1598,6 +1594,7 @@ impl ObjectManager {
 		attacks: i32,
 		team_id: i32,
 		mif: Option<&MIFInterface>,
+		resource: &ResourceManager,
 		sound: &mut SoundManager<'a>,
 	) {
 		if !self.small_object_index[hit_small_object_id].object.enable_flag() {
@@ -1611,7 +1608,7 @@ impl ObjectManager {
 
 		self.small_object_index[hit_small_object_id].hit_bullet(attacks, mif);
 
-		let texture = self.blood_free_smoke_texture();
+		let texture = resource.get_effect_smoke_texture();
 		self.add_effect(
 			x,
 			y,
@@ -1661,12 +1658,6 @@ impl ObjectManager {
 		}
 	}
 
-	/// The smoke texture, fetched without borrowing the resource manager across a `&mut
-	/// self` call. Only the two small object hits need this shape.
-	fn blood_free_smoke_texture(&self) -> i32 {
-		SMOKE_TEXTURE
-	}
-
 	/// `GrenadeExplosion`: the blast, and everything it does to the humans and small
 	/// objects around it.
 	///
@@ -1675,13 +1666,14 @@ impl ObjectManager {
 	/// separately by the map at each. The two are added.
 	///
 	/// Returns whether the blast hit anything.
-	pub fn grenade_explosion(
+	pub fn grenade_explosion<'a>(
 		&mut self,
 		grenade_id: usize,
 		coll: &Collision,
 		block_data_if: &BlockDataInterface,
+		mif: Option<&MIFInterface>,
 		resource: &ResourceManager,
-		sound: &mut SoundManager,
+		sound: &mut SoundManager<'a>,
 		config: &Config,
 	) -> bool {
 		let Some(in_grenade) = self.grenade_index.get(grenade_id) else {
@@ -1714,7 +1706,6 @@ impl ObjectManager {
 				continue;
 			}
 
-			let mut dummy = 0.0;
 			let mut total_damage = 0;
 
 			// At the feet.
@@ -1818,7 +1809,6 @@ impl ObjectManager {
 				continue;
 			}
 
-			let mut dummy = 0.0;
 			if coll
 				.check_all_block_intersect_ray(block_data_if, gx, gy, gz, x / r, y / r, z / r, r)
 				.is_some()
@@ -1829,7 +1819,6 @@ impl ObjectManager {
 			let (id, _) = self.small_object_index[i].param_data();
 			let damage = SMALLOBJECT_DAMAGE_GRENADE
 				- (SMALLOBJECT_DAMAGE_GRENADE as f32 / MAX_DAMAGE_GRENADE_DISTANCE * r) as i32;
-			let mif = MIF_FOR_SMALL_OBJECT;
 			self.small_object_index[i].hit_grenade_explosion(damage, mif);
 
 			sound.hit_small_object(sx, sy, sz, id, teamid);
@@ -1840,8 +1829,6 @@ impl ObjectManager {
 
 			returnflag = true;
 		}
-
-		let _ = dummy_unused();
 
 		// The flash.
 		self.add_effect(
@@ -2020,7 +2007,7 @@ impl ObjectManager {
 		resource: &ResourceManager,
 		config: &Config,
 	) -> Option<(i32, i32, f32, f32, f32)> {
-		if !in_effect.enable_flag() {
+		if !in_effect.object.enable_flag() {
 			return None;
 		}
 		if !in_effect.collide_map_flag() {
@@ -2113,10 +2100,10 @@ impl ObjectManager {
 			bullet.object.set_enable_flag(false);
 		}
 		for grenade in self.grenade_index.iter_mut() {
-			grenade.set_enable_flag(false);
+			grenade.bullet.object.set_enable_flag(false);
 		}
 		for effect in self.effect_index.iter_mut() {
-			effect.set_enable_flag(false);
+			effect.object.set_enable_flag(false);
 		}
 
 		resource.cleanup_human_texture(d3dg);
@@ -2285,7 +2272,7 @@ impl ObjectManager {
 		self.apply_bullet_model(resource);
 
 		for effect in self.effect_index.iter_mut() {
-			effect.set_enable_flag(false);
+			effect.object.set_enable_flag(false);
 		}
 
 		self.object_log.info_log(b"Recovery object...");
@@ -2439,7 +2426,7 @@ impl ObjectManager {
 
 	/// `GetNewGrenadeObject`: the first unused grenade, as an index.
 	pub fn get_new_grenade_object(&self) -> Option<usize> {
-		(0..MAX_GRENADE).find(|&i| !self.grenade_index[i].enable_flag())
+		(0..MAX_GRENADE).find(|&i| !self.grenade_index[i].bullet.object.enable_flag())
 	}
 
 	/// `SearchHuman`: the first enabled human whose point identifier matches.
@@ -2477,11 +2464,31 @@ impl ObjectManager {
 	/// `GetTotalObjects`: how many of each pool are in use.
 	pub fn get_total_objects(&self) -> (i32, i32, i32, i32, i32, i32) {
 		let humans = self.human_index.iter().filter(|o| o.enable_flag()).count() as i32;
-		let weapons = self.weapon_index.iter().filter(|o| o.enable_flag()).count() as i32;
-		let small_objects = self.small_object_index.iter().filter(|o| o.enable_flag()).count() as i32;
-		let bullets = self.bullet_index.iter().filter(|o| o.enable_flag()).count() as i32;
-		let grenades = self.grenade_index.iter().filter(|o| o.enable_flag()).count() as i32;
-		let effects = self.effect_index.iter().filter(|o| o.enable_flag()).count() as i32;
+		let weapons = self
+			.weapon_index
+			.iter()
+			.filter(|o| o.object.enable_flag())
+			.count() as i32;
+		let small_objects = self
+			.small_object_index
+			.iter()
+			.filter(|o| o.object.enable_flag())
+			.count() as i32;
+		let bullets = self
+			.bullet_index
+			.iter()
+			.filter(|o| o.object.enable_flag())
+			.count() as i32;
+		let grenades = self
+			.grenade_index
+			.iter()
+			.filter(|o| o.bullet.object.enable_flag())
+			.count() as i32;
+		let effects = self
+			.effect_index
+			.iter()
+			.filter(|o| o.object.enable_flag())
+			.count() as i32;
 
 		(humans, weapons, small_objects, bullets, grenades, effects)
 	}
@@ -2627,7 +2634,7 @@ impl ObjectManager {
 
 			self.grenade_index[grenade_id].set_pos_data(pos_x, pos_y + WEAPONSHOT_HEIGHT, pos_z, rx, ry);
 			self.grenade_index[grenade_id].set_param_data(8.0, teamid, human_id as i32, 1.0, true);
-			self.grenade_index[grenade_id].set_enable_flag(true);
+			self.grenade_index[grenade_id].bullet.object.set_enable_flag(true);
 		}
 
 		if param_data.soundvolume > 0 {
@@ -3121,7 +3128,7 @@ impl ObjectManager {
 		let enemy_human_data_id = self.human_index[enemy_human_id].get_param_data().1;
 		let enemy_human_team_id = self.human_index[enemy_human_id].get_param_data().3;
 
-		let (mx, my, mz, _) = self.human_index[my_human_id].pos_data();
+		let (mx, _, mz, _) = self.human_index[my_human_id].pos_data();
 		let (tx, ty, tz, _) = self.human_index[enemy_human_id].pos_data();
 		let ty = ty + VIEW_HEIGHT;
 
@@ -3413,7 +3420,7 @@ impl ObjectManager {
 
 				if self.bullet_index[i].object.enable_flag() {
 					let (_, _, speed, teamid, _, _) = self.bullet_index[i].param_data();
-					let (bx, by, bz, brx, bry) = self.bullet_index[i].object.pos_data();
+					let (bx, by, bz, brx, bry) = self.bullet_index[i].pos_data();
 					let mx = brx.cos() * bry.cos() * speed;
 					let my = bry.sin() * speed;
 					let mz = brx.sin() * bry.cos() * speed;
@@ -3423,7 +3430,7 @@ impl ObjectManager {
 		} else {
 			// The menu and the briefing screens have no bullets.
 			for bullet in self.bullet_index.iter_mut() {
-				if bullet.enable_flag() {
+				if bullet.object.enable_flag() {
 					bullet.object.set_enable_flag(false);
 				}
 			}
@@ -3462,10 +3469,10 @@ impl ObjectManager {
 					-0.002,
 					GAMEFPS as i32 * 20,
 				);
-				self.effect_index[i].set_enable_flag(false);
+				self.effect_index[i].object.set_enable_flag(false);
 			} else {
 				self.effect_index[i].process_object();
-				self.effect_index[i].set_dark_model_flag(screen);
+				self.effect_index[i].object.set_dark_model_flag(screen);
 			}
 		}
 
@@ -3474,7 +3481,7 @@ impl ObjectManager {
 				let speed = self.grenade_index[i].get_speed();
 
 				let rcr = self.grenade_index[i].process_object(coll, block_data_if);
-				self.grenade_index[i].set_dark_model_flag(screen);
+				self.grenade_index[i].bullet.object.set_dark_model_flag(screen);
 
 				// A bounce, if it was moving fast enough to be worth hearing.
 				if rcr == 1 && speed > 3.4 {
@@ -3484,13 +3491,13 @@ impl ObjectManager {
 				}
 
 				if rcr == 2 {
-					self.grenade_explosion(i, coll, block_data_if, resource, sound, config);
+					self.grenade_explosion(i, coll, block_data_if, mif, resource, sound, config);
 				}
 			}
 		} else {
 			for grenade in self.grenade_index.iter_mut() {
 				if grenade.bullet.object.enable_flag() {
-					grenade.set_enable_flag(false);
+					grenade.bullet.object.set_enable_flag(false);
 				}
 			}
 		}
@@ -3542,18 +3549,18 @@ impl ObjectManager {
 	/// stable: two effects at the same distance keep their pool order, and an unstable
 	/// sort would let them swap frame to frame and flicker. The comparison is on the
 	/// squared distance, so the square roots are never taken.
-	pub fn sort_effect(&self, camera_x: f32, camera_y: f32, camera_z: f32, data: &mut [Effectdata]) -> usize {
+	fn sort_effect(&self, camera_x: f32, camera_y: f32, camera_z: f32, data: &mut [Effectdata]) -> usize {
 		let mut cnt = 0;
 
 		for i in 0..MAX_EFFECT {
-			if !self.effect_index[i].enable_flag() {
+			if !self.effect_index[i].object.enable_flag() {
 				continue;
 			}
 			if cnt >= data.len() {
 				break;
 			}
 
-			let (ex, ey, ez, _) = self.effect_index[i].pos_data();
+			let (ex, ey, ez, _) = self.effect_index[i].object.pos_data();
 			let x = ex - camera_x;
 			let y = ey - camera_y;
 			let z = ez - camera_z;
@@ -3675,5 +3682,870 @@ impl ObjectManager {
 impl Default for ObjectManager {
 	fn default() -> Self {
 		Self::new()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::config::Config;
+	use crate::datafile::{PointDataInterface, TOTAL_BLOCKTEXTURE};
+	use crate::parameter::HUMAN_PARAMETER;
+	use xops_platform::gfx::Gfx;
+
+	// --- helpers ---------------------------------------------------------
+
+	/// A renderer with no window and no surface, the same shape the renderer's own tests
+	/// use. Only the paths that have to touch the renderer get one.
+	fn headless() -> D3DGraphics {
+		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
+			backends: xops_platform::wgpu::Backends::all(),
+			..Default::default()
+		});
+		let gfx = Gfx::new(&instance, None, 64, 48, None).expect("a headless renderer");
+		D3DGraphics::new(gfx, false, 0)
+	}
+
+	/// A sound manager with no sound class, so every call just queues.
+	fn sound<'a>() -> SoundManager<'a> {
+		SoundManager::new(None, None, None)
+	}
+
+	/// The player's settings, with the defaults applied when blood is wanted.
+	fn config(blood: bool) -> Config {
+		let mut config = Config::new();
+		if blood {
+			config.set_default_config();
+		}
+		config
+	}
+
+	/// A collision class that has never been initialised, so every query answers no. That
+	/// is what an empty map is: nothing is in the way.
+	fn empty_world() -> (Collision, BlockDataInterface) {
+		(Collision::new(), BlockDataInterface::new())
+	}
+
+	/// A map holding one unit cube at the origin, loaded and prepared the way a mission
+	/// load leaves it. Copied from the human tests: a human that has to keep standing, or
+	/// land, needs a real block under it and the loader is the only way to get one.
+	fn one_cube_map(name: &str) -> (BlockDataInterface, Collision) {
+		const CUBE: [(f32, f32, f32); 8] = [
+			(0.0, 0.0, 0.0),
+			(1.0, 0.0, 0.0),
+			(1.0, 1.0, 0.0),
+			(0.0, 1.0, 0.0),
+			(0.0, 0.0, 1.0),
+			(1.0, 0.0, 1.0),
+			(1.0, 1.0, 1.0),
+			(0.0, 1.0, 1.0),
+		];
+
+		let mut image = Vec::new();
+		image.extend_from_slice(&[0u8; 31 * TOTAL_BLOCKTEXTURE]);
+		image.extend_from_slice(&1u16.to_le_bytes());
+		for axis in 0..3 {
+			for corner in CUBE {
+				let value = match axis {
+					0 => corner.0,
+					1 => corner.1,
+					_ => corner.2,
+				};
+				image.extend_from_slice(&value.to_bits().to_le_bytes());
+			}
+		}
+		for i in 24..72 {
+			image.extend_from_slice(&(i as f32).to_bits().to_le_bytes());
+		}
+		for j in 0..6 {
+			image.extend_from_slice(&[j as u8, 0, 0, 0]);
+		}
+		image.extend_from_slice(&[0; 4]);
+
+		let path = temp_path(name);
+		std::fs::write(&path, image).expect("write the temp map");
+
+		let mut blocks = BlockDataInterface::new();
+		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
+		blocks.calculation_blockdata(false);
+
+		let mut coll = Collision::new();
+		assert_eq!(coll.init_collision(Some(&blocks)), 0);
+		(blocks, coll)
+	}
+
+	/// Places a human with type 0's health at a position, on a team.
+	fn place_human(mgr: &mut ObjectManager, slot: usize, x: f32, y: f32, z: f32, team: i32, rx: f32) {
+		mgr.human_index[slot].set_pos_data(x, y, z, rx);
+		mgr.human_index[slot].set_param_data(0, 0, slot as i16, team, true);
+		mgr.human_index[slot].object.set_enable_flag(true);
+	}
+
+	/// Places a weapon nobody holds.
+	fn place_weapon(mgr: &mut ObjectManager, slot: usize, x: f32, y: f32, z: f32) {
+		mgr.weapon_index[slot].set_pos_data(x, y, z, 0.0);
+		mgr.weapon_index[slot].set_param_data(1, 0, 30, true);
+		mgr.weapon_index[slot].object.set_enable_flag(true);
+	}
+
+	/// Empties the hands of human 0, so the next pickup has a slot to go into.
+	fn clear_hands(mgr: &mut ObjectManager) {
+		mgr.human_index[0].set_weapon(
+			[None; TOTAL_HAVEWEAPON],
+			[0; TOTAL_HAVEWEAPON],
+			[0; TOTAL_HAVEWEAPON],
+			&mut mgr.weapon_index,
+		);
+	}
+
+	/// The parameter a human type of a given kind is at, found rather than hard coded so
+	/// the test does not break when the table is edited.
+	fn human_type_of(kind: i32) -> i32 {
+		(0..TOTAL_PARAMETERINFO_HUMAN as i32)
+			.find(|&i| HUMAN_PARAMETER[i as usize].r#type == kind)
+			.expect("the table has a human of every kind")
+	}
+
+	fn temp_path(name: &str) -> std::path::PathBuf {
+		std::env::temp_dir().join(format!("xops_objectmanager_{}_{}", std::process::id(), name))
+	}
+
+	/// A .pd1 image: a two byte count and then four floats and four signed bytes a point.
+	fn pd1_image(points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> Vec<u8> {
+		let mut out = Vec::new();
+		out.extend_from_slice(&(points.len() as u16).to_le_bytes());
+		for &(x, y, z, r, p1, p2, p3, p4) in points {
+			for value in [x, y, z, r] {
+				out.extend_from_slice(&value.to_bits().to_le_bytes());
+			}
+			out.extend_from_slice(&[p1 as u8, p2 as u8, p3 as u8, p4 as u8]);
+		}
+		out
+	}
+
+	fn point_data(name: &str, points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
+		let path = temp_path(name);
+		std::fs::write(&path, pd1_image(points)).expect("write temp point file");
+		let mut data = PointDataInterface::new();
+		assert_eq!(
+			data.load_file_data(path.to_string_lossy().as_bytes()),
+			0,
+			"the temp point file loads"
+		);
+		data
+	}
+
+	// --- the pools -------------------------------------------------------
+
+	#[test]
+	fn every_pool_is_allocated_at_its_upstream_size_and_starts_empty() {
+		let mgr = ObjectManager::new();
+
+		assert_eq!(mgr.human_index.len(), MAX_HUMAN);
+		assert_eq!(mgr.weapon_index.len(), MAX_WEAPON);
+		assert_eq!(mgr.small_object_index.len(), MAX_SMALLOBJECT);
+		assert_eq!(mgr.bullet_index.len(), MAX_BULLET);
+		assert_eq!(mgr.grenade_index.len(), MAX_GRENADE);
+		assert_eq!(mgr.effect_index.len(), MAX_EFFECT);
+
+		assert_eq!(mgr.bullet_obj_human_index.len(), MAX_BULLET);
+		assert_eq!(mgr.get_total_objects(), (0, 0, 0, 0, 0, 0));
+		assert_eq!(mgr.get_player_id(), 0);
+		assert_eq!(mgr.framecnt, 0);
+	}
+
+	#[test]
+	fn a_freed_slot_is_the_one_the_next_object_takes() {
+		let mut mgr = ObjectManager::new();
+		let d3dg = headless();
+		let resource = ResourceManager::new();
+
+		// The next human goes into the lowest free slot, which slot 5 being taken does
+		// not change.
+		mgr.human_index[5].object.set_enable_flag(true);
+		let first = mgr.add_human_index(0.0, 0.0, 0.0, 0.0, 0, 1, [0, 0], 3, false, &d3dg, &resource);
+		assert_eq!(first, 0);
+		let second = mgr.add_human_index(0.0, 0.0, 0.0, 0.0, 0, 1, [0, 0], 3, false, &d3dg, &resource);
+		assert_eq!(second, 1);
+
+		// Human type 0 has 120 health and the team it was placed with.
+		let human = mgr.get_human_object(0).expect("human 0");
+		assert_eq!(human.hp(), 120);
+		assert_eq!(human.get_param_data(), (0, -1, 3, 1));
+		assert_eq!(human.pos_data().0, 0.0);
+
+		mgr.bullet_index[7].object.set_enable_flag(true);
+		assert_eq!(mgr.get_total_objects(), (3, 0, 0, 1, 0, 0));
+
+		// A cleanup frees every pool, and the next add starts from slot 0 again.
+		mgr.cleanup(&mut headless(), &mut ResourceManager::new());
+		assert_eq!(mgr.get_total_objects(), (0, 0, 0, 0, 0, 0));
+
+		let again = mgr.add_human_index(0.0, 0.0, 0.0, 0.0, 0, 1, [0, 0], 3, false, &d3dg, &resource);
+		assert_eq!(again, 0);
+	}
+
+	#[test]
+	fn the_effect_pool_hands_out_slots_in_order_and_takes_them_back() {
+		let mut mgr = ObjectManager::new();
+
+		let count = 3;
+		let add = |mgr: &mut ObjectManager, x: f32, count: i32| {
+			mgr.add_effect(
+				x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 7, 0, 0, 1.0, 0.0,
+				effect_type::NORMAL, count,
+			)
+		};
+
+		assert_eq!(add(&mut mgr, 0.0, count), 0);
+		assert_eq!(add(&mut mgr, 0.0, count), 1);
+		assert_eq!(mgr.get_total_objects().5, 2);
+
+		// A three frame effect survives three frames and retires on the fourth.
+		assert_eq!(mgr.effect_index[0].count(), 3);
+		for _ in 0..3 {
+			assert_eq!(mgr.effect_index[0].process_object(), 1, "still counting down");
+		}
+		assert!(mgr.effect_index[0].object.enable_flag());
+		assert_eq!(mgr.effect_index[0].count(), 0);
+		assert_eq!(mgr.effect_index[0].process_object(), 2, "the count ran out");
+		assert!(!mgr.effect_index[0].object.enable_flag());
+		assert_eq!(mgr.get_total_objects().5, 1);
+
+		// The retired slot is the next one handed out.
+		assert_eq!(add(&mut mgr, 0.0, count), 0);
+	}
+
+	// --- the point data walk ---------------------------------------------
+
+	#[test]
+	fn the_point_data_walk_builds_the_humans_weapons_and_objects_the_mission_asks_for() {
+		let mut mgr = ObjectManager::new();
+		let mut d3dg = headless();
+		let mut resource = ResourceManager::new();
+		let (coll, blocks) = empty_world();
+
+		// Human type 2 is 'special green A': 110 health, texture 16, and the weapons 3
+		// and 6. The search matches the info point's p4 against the human point's p2, and
+		// the type itself is read from the info point's p2, so both carry the number.
+		let points = [
+			(0.0, 0.0, 0.0, 0.0, POINT_P1TYPE_HUMANINFO as i8, 2, 1, 2),
+			(10.0, 2.0, 20.0, 1.5, POINT_P1TYPE_HUMAN as i8, 2, 0, 3),
+			(30.0, 0.0, 40.0, 0.0, POINT_P1TYPE_WEAPON as i8, 5, 7, 0),
+			(50.0, 0.0, 60.0, 0.0, POINT_P1TYPE_SMALLOBJ as i8, 1, 0, 9),
+		];
+		let points = point_data("walk.pd1", &points);
+
+		mgr.set_class(&resource);
+		mgr.load_point_data(&mut d3dg, &mut resource, &points, &coll, &blocks, None);
+
+		// The human, placed where the mission says and described by its info point. The
+		// mission walk asks for the random correction, so the position is within a tenth
+		// of a unit of the point and the angle within 0.8 degrees.
+		let human = mgr.get_human_object(0).expect("the human");
+		let (px, py, pz, prx) = human.pos_data();
+		assert!(human.enable_flag());
+		assert!((px - 10.0).abs() <= 0.1, "{px}");
+		assert!((pz - 20.0).abs() <= 0.1, "{pz}");
+		assert!((prx - 1.5).abs() <= degree_to_radian(0.8), "{prx}");
+		assert_eq!(py, 2.0);
+		assert_eq!(human.hp(), 110);
+		// The data number is the human's own point index in the file, which is 1.
+		assert_eq!(human.get_param_data(), (2, 1, 3, 1));
+
+		// Its texture could not be loaded from a temp directory, so it retries every
+		// frame, which is the mystery human path.
+		assert_eq!(resource.get_human_texture(2), -1);
+		assert!(mgr.human_frame_texture_refresh[0]);
+
+		// The two weapons the human type carries went into the first two weapon slots,
+		// and the weapon standing on its own into the third.
+		let (selectweapon, weapon, _, _) = human.get_weapon();
+		assert_eq!(selectweapon, 1);
+		assert_eq!(weapon, [Some(0), Some(1)]);
+		assert!(mgr.weapon_index[0].using_flag(), "a held weapon is in use");
+		assert_eq!(mgr.weapon_index[0].param_data().0, 3);
+		assert_eq!(mgr.weapon_index[1].param_data().0, 6);
+
+		let standing = mgr.get_weapon_object(2).expect("the standing weapon");
+		assert!(standing.object.enable_flag());
+		assert!(!standing.using_flag());
+		assert_eq!(standing.param_data().0, 5);
+		assert_eq!(standing.object.pos_data(), (30.0, 0.0, 40.0, 0.0));
+
+		// The small object, with the identifier its point carried and the table's health.
+		let prop = mgr.get_small_object(0).expect("the small object");
+		assert_eq!(prop.param_data(), (1, 9));
+		assert_eq!(prop.hp(), 60);
+		assert_eq!(prop.object.pos_data(), (50.0, 0.0, 60.0, 0.0));
+
+		assert_eq!(mgr.get_total_objects(), (1, 3, 1, 0, 0, 0));
+	}
+
+	#[test]
+	fn a_human_point_with_no_info_point_becomes_the_black_human_and_the_player() {
+		let mut mgr = ObjectManager::new();
+		let mut d3dg = headless();
+		let mut resource = ResourceManager::new();
+		let (coll, blocks) = empty_world();
+
+		// p4 of 0 marks the human the player controls.
+		let points = [(5.0, 0.0, 6.0, 0.0, POINT_P1TYPE_HUMAN2 as i8, 7, 3, 0)];
+		let points = point_data("noinfo.pd1", &points);
+		mgr.load_point_data(&mut d3dg, &mut resource, &points, &coll, &blocks, None);
+
+		let human = mgr.get_human_object(0).expect("the human");
+		assert_eq!(human.get_param_data(), (0, -1, 0, 0));
+		assert_eq!(human.hp(), 120);
+		assert_eq!(mgr.get_player_id(), 0);
+
+		// A HUMAN2 point carries one weapon, and the second is disabled by the fallback.
+		let (_, weapon, _, _) = human.get_weapon();
+		assert_eq!(weapon, [Some(0), None]);
+	}
+
+	#[test]
+	fn a_later_duplicate_identifier_resolves_to_the_first_human_in_the_file() {
+		let mut mgr = ObjectManager::new();
+		let mut d3dg = headless();
+		let mut resource = ResourceManager::new();
+		let (coll, blocks) = empty_world();
+
+		// Both humans have p4 of 4, and the search returns the first one in the file.
+		let points = [
+			(0.0, 0.0, 0.0, 0.0, POINT_P1TYPE_HUMANINFO as i8, 2, 1, 2),
+			(1.0, 0.0, 0.0, 0.0, POINT_P1TYPE_HUMAN as i8, 2, 0, 4),
+			(2.0, 0.0, 0.0, 0.0, POINT_P1TYPE_HUMAN as i8, 2, 0, 4),
+		];
+		let points = point_data("dupe.pd1", &points);
+		mgr.load_point_data(&mut d3dg, &mut resource, &points, &coll, &blocks, None);
+
+		assert_eq!(mgr.search_human(4), Some(0));
+		let second = mgr.get_human_object(1).expect("the second human");
+		assert!((second.pos_data().0 - 2.0).abs() <= 0.1, "{}", second.pos_data().0);
+		assert_eq!(mgr.search_human(99), None);
+	}
+
+	// --- the pickup ------------------------------------------------------
+
+	#[test]
+	fn the_pickup_range_ends_exactly_at_its_two_limits() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+
+		// At the radius but not inside it.
+		place_weapon(&mut mgr, 1, HUMAN_PICKUPWEAPON_R, 0.0, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 1);
+		assert!(!mgr.weapon_index[1].using_flag(), "3.8 is not inside 3.8");
+
+		// A hundredth inside it is.
+		place_weapon(&mut mgr, 2, HUMAN_PICKUPWEAPON_R - 0.01, 0.0, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 2);
+		assert!(mgr.weapon_index[2].using_flag());
+
+		// At the upper height limit.
+		place_weapon(&mut mgr, 3, 0.0, HUMAN_PICKUPWEAPON_H, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 3);
+		assert!(mgr.weapon_index[3].using_flag());
+
+		// A tenth above it is not.
+		place_weapon(&mut mgr, 4, 0.0, HUMAN_PICKUPWEAPON_H + 0.1, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 4);
+		assert!(!mgr.weapon_index[4].using_flag());
+
+		// At the lower height limit.
+		place_weapon(&mut mgr, 5, 0.0, HUMAN_PICKUPWEAPON_L, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 5);
+		assert!(mgr.weapon_index[5].using_flag());
+
+		// A tenth below it is not.
+		place_weapon(&mut mgr, 6, 0.0, HUMAN_PICKUPWEAPON_L - 0.1, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 6);
+		assert!(!mgr.weapon_index[6].using_flag());
+
+		// The distance is flat: height does not make up for it.
+		place_weapon(&mut mgr, 7, HUMAN_PICKUPWEAPON_R + 0.5, 16.0, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 7);
+		assert!(!mgr.weapon_index[7].using_flag());
+	}
+
+	#[test]
+	fn a_zombie_and_a_corpse_pick_nothing_up() {
+		let mut mgr = ObjectManager::new();
+
+		// A zombie.
+		let zombie = human_type_of(2);
+		mgr.human_index[0].set_param_data(zombie, 0, 0, 0, true);
+		mgr.human_index[0].set_pos_data(0.0, 0.0, 0.0, 0.0);
+		mgr.human_index[0].object.set_enable_flag(true);
+		place_weapon(&mut mgr, 0, 0.0, 0.0, 0.0);
+		mgr.pickup_weapon(0, 0);
+		assert!(!mgr.weapon_index[0].using_flag(), "a zombie does not pick up");
+
+		// A dead human.
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+		mgr.human_index[0].hit_grenade_explosion(200);
+		// The upstream does not clamp the health, so it goes below zero rather than to it.
+		assert_eq!(mgr.human_index[0].hp(), -80);
+		place_weapon(&mut mgr, 0, 0.0, 0.0, 0.0);
+		clear_hands(&mut mgr);
+		mgr.pickup_weapon(0, 0);
+		assert!(!mgr.weapon_index[0].using_flag(), "a corpse does not pick up");
+
+		// A robot does: only the zombie type is refused.
+		let robot = human_type_of(1);
+		mgr.human_index[0].set_param_data(robot, 0, 0, 0, true);
+		mgr.human_index[0].set_pos_data(0.0, 0.0, 0.0, 0.0);
+		mgr.human_index[0].object.set_enable_flag(true);
+		place_weapon(&mut mgr, 0, 0.0, 0.0, 0.0);
+		mgr.pickup_weapon(0, 0);
+		assert!(mgr.weapon_index[0].using_flag());
+	}
+
+	// --- damage ----------------------------------------------------------
+
+	#[test]
+	fn the_hit_location_picks_the_damage_multiplier() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 0, 0.0);
+
+		// Attacks of 20, and the three bands do not overlap. The base is the multiplier
+		// applied in f32 and truncated, which is 40, 20 and 14, and the human adds its own
+		// roll on top: up to 15 for the head, 7 for the body and 5 for the legs.
+		for (hit_id, base, roll) in [(0, 40, 15), (1, 20, 7), (2, 14, 5)] {
+			place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+			let before = mgr.human_index[0].hp();
+			assert_eq!(before, 120);
+
+			mgr.hit_bullet_human(
+				0,
+				hit_id,
+				0.0,
+				0.0,
+				0.0,
+				0.0,
+				20,
+				1,
+				1.0,
+				&resource,
+				&mut sound(),
+				&config,
+			);
+
+			let lost = before - mgr.human_index[0].hp();
+			assert!(
+				(base..=base + roll).contains(&lost),
+				"hit {hit_id} cost {lost}, outside {base}..={}",
+				base + roll
+			);
+		}
+	}
+
+	#[test]
+	fn the_blood_effect_count_is_the_damage_divided_by_ten() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(true);
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 0, 0.0);
+
+		// One effect is the spray and the rest are one drop per ten points of damage. At
+		// 20 attacks the truncated damage is 40, 20 and 14, so the drops are 4, 2 and 1.
+		for (hit_id, effects) in [(0, 5), (1, 3), (2, 2)] {
+			for effect in mgr.effect_index.iter_mut() {
+				effect.object.set_enable_flag(false);
+			}
+			place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+
+			mgr.hit_bullet_human(
+				0,
+				hit_id,
+				0.0,
+				0.0,
+				0.0,
+				0.0,
+				20,
+				1,
+				1.0,
+				&resource,
+				&mut sound(),
+				&config,
+			);
+
+			assert_eq!(mgr.get_total_objects().5, effects, "hit {hit_id}");
+		}
+	}
+
+	#[test]
+	fn the_blood_spray_is_not_drawn_when_the_setting_is_off() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 0, 0.0);
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+
+		mgr.hit_bullet_human(
+			0,
+			0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			20,
+			1,
+			1.0,
+			&resource,
+			&mut sound(),
+			&config(false),
+		);
+
+		// The damage still lands, only the effects are missing.
+		assert_eq!(mgr.get_total_objects().5, 0);
+		assert!(mgr.human_index[0].hp() < 120);
+	}
+
+	#[test]
+	fn a_hit_scores_for_the_human_that_fired_it() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 1, 0.0);
+
+		mgr.hit_bullet_human(
+			1,
+			0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			20,
+			0,
+			0.5,
+			&resource,
+			&mut sound(),
+			&config,
+		);
+
+		assert_eq!(mgr.get_human_shot_info(0), Some((0.5, 0, 1)));
+
+		// A killing blow counts as a kill, and the head hit is already counted.
+		mgr.human_index[1].set_hp(30);
+		mgr.hit_bullet_human(
+			1,
+			0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			20,
+			0,
+			0.5,
+			&resource,
+			&mut sound(),
+			&config,
+		);
+		let (ontarget, kill, headshot) = mgr.get_human_shot_info(0).expect("human 0");
+		assert_eq!(kill, 1);
+		assert_eq!(headshot, 2);
+		assert_eq!(ontarget, 1.0);
+		assert!(mgr.human_index[1].hp() <= 0);
+	}
+
+	// --- the grenade -----------------------------------------------------
+
+	#[test]
+	fn the_grenade_falloff_runs_from_the_centre_to_the_maximum_distance() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		let (coll, blocks) = empty_world();
+		let mut shots = Vec::new();
+
+		// The blast is computed twice per human, at the feet and at the head, and the two
+		// are added. With the human and the grenade in the same spot that is
+		// (80 - 2) + (100 - 22) = 156, and the wind pressure is
+		// 2.2 / 80 * (80 - 1) = 2.1725 upwards.
+		for (gx, expected_damage, expected_hit) in [
+			(0.0, 156, true),
+			(79.0, 1, true),
+			(MAX_DAMAGE_GRENADE_DISTANCE, 0, false),
+			(110.0, 0, false),
+		] {
+			place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+			mgr.human_index[0].set_hp(500);
+			mgr.human_index[0].object.set_enable_flag(true);
+
+			mgr.grenade_index[0].set_pos_data(gx, 0.0, 0.0, 0.0, 0.0);
+			mgr.grenade_index[0].set_param_data(8.0, 0, 1, 1.0, true);
+			mgr.grenade_index[0].bullet.object.set_enable_flag(true);
+
+			let hit = mgr.grenade_explosion(
+				0,
+				&coll,
+				&blocks,
+				None,
+				&resource,
+				&mut sound(),
+				&config,
+			);
+
+			assert_eq!(hit, expected_hit, "at {gx}");
+			assert_eq!(500 - mgr.human_index[0].hp(), expected_damage, "at {gx}");
+			shots.push(mgr.human_index[0].move_pos().1);
+		}
+
+		// The blast throws the body up, and only the point blank one is worth pinning.
+		assert!((shots[0] - 2.1725).abs() < 1e-3, "{}", shots[0]);
+		assert_eq!(shots[2], 0.0, "a blast that does nothing moves nothing");
+	}
+
+	#[test]
+	fn the_grenade_falloff_is_checked_against_a_small_object_too() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		let (coll, blocks) = empty_world();
+
+		// Small object 1 is the pc, with 60 health. The blast damage is
+		// 80 - (80 / 80 * r), so one unit out is 79 and it is destroyed, and 79 units out
+		// is the single point of damage the falloff still allows.
+		let blast = |mgr: &mut ObjectManager, x: f32| {
+			mgr.small_object_index[0].object.set_pos_data(x, 0.0, 0.0, 0.0);
+			mgr.small_object_index[0].set_param_data(1, 5, true, None);
+			mgr.small_object_index[0].object.set_enable_flag(true);
+
+			mgr.grenade_index[0].set_pos_data(0.0, 0.0, 0.0, 0.0, 0.0);
+			mgr.grenade_index[0].set_param_data(8.0, 0, 1, 1.0, true);
+
+			mgr.grenade_explosion(0, &coll, &blocks, None, &resource, &mut sound(), &config)
+		};
+
+		assert!(blast(&mut mgr, 1.0));
+		// A destroyed object reports zero rather than a negative, because the destruction
+		// state is what the draw reads.
+		assert_eq!(mgr.small_object_index[0].hp(), 0);
+
+		assert!(blast(&mut mgr, 79.0));
+		assert_eq!(mgr.small_object_index[0].hp(), 60 - (80 - 79));
+
+		// At exactly the maximum distance the falloff has reached zero damage. The object
+		// is left alone, but the blast still counts as having reached it, because the
+		// upstream test is the ray and not the damage.
+		assert!(blast(&mut mgr, MAX_DAMAGE_GRENADE_DISTANCE));
+		assert_eq!(mgr.small_object_index[0].hp(), 60);
+	}
+
+	// --- the team checks -------------------------------------------------
+
+	#[test]
+	fn the_zombie_reach_is_3_3_units_on_the_flat_and_one_body_height_up() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+		place_human(&mut mgr, 1, 0.0, 0.0, 2.0, 1, 0.0);
+
+		// The attack point is two units in front, and the target is inside it.
+		assert!(mgr.check_zombie_attack(0, 1));
+
+		// Just inside the reach.
+		mgr.human_index[1].set_pos_data(0.0, 0.0, 2.0 + 3.29, 0.0);
+		assert!(mgr.check_zombie_attack(0, 1));
+
+		// Just outside it.
+		mgr.human_index[1].set_pos_data(0.0, 0.0, 2.0 + 3.31, 0.0);
+		assert!(!mgr.check_zombie_attack(0, 1));
+
+		// A member of the same team is never a target.
+		mgr.human_index[1].set_pos_data(0.0, 0.0, 2.0, 0.0);
+		mgr.human_index[1].set_param_data(0, 0, 1, 0, true);
+		assert!(!mgr.check_zombie_attack(0, 1));
+	}
+
+	#[test]
+	fn friendly_fire_is_off_until_it_is_set_and_an_id_outside_the_pool_reads_as_off() {
+		let mut mgr = ObjectManager::new();
+
+		assert!(!mgr.get_friendly_fire_flag(0));
+		mgr.set_friendly_fire_flag(0, true);
+		assert!(mgr.get_friendly_fire_flag(0));
+		assert!(!mgr.get_friendly_fire_flag(1));
+
+		assert!(!mgr.get_friendly_fire_flag(-1));
+		assert!(!mgr.get_friendly_fire_flag(MAX_HUMAN as i32));
+		mgr.set_friendly_fire_flag(MAX_HUMAN as i32, true);
+		assert!(!mgr.get_friendly_fire_flag(MAX_HUMAN as i32));
+	}
+
+	#[test]
+	fn a_bullet_passes_through_its_own_team_until_friendly_fire_is_on() {
+		let mut mgr = ObjectManager::new();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		let (coll, blocks) = empty_world();
+
+		// The shooter is human 1, the target human 0, and both are on team 0. The bullet
+		// leaves the shooter one unit off the ground and travels one step of
+		// BULLET_SPEEDSCALE, which puts it inside the target's leg cylinder.
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 0, 0.0);
+		place_human(&mut mgr, 0, 2.0, 0.0, 0.0, 0, 0.0);
+
+		let fire = |mgr: &mut ObjectManager| {
+			mgr.bullet_index[0].set_pos_data(0.0, 1.5, 0.0, 0.0, 0.0);
+			mgr.bullet_index[0].set_param_data(20, 0, BULLET_SPEEDSCALE, 0, 1, 1.0, true);
+			mgr.bullet_index[0].object.set_enable_flag(true);
+			mgr.bullet_obj_human_index[0].init();
+			mgr.collide_bullet(0, &coll, &blocks, None, &resource, &mut sound(), &config)
+		};
+
+		assert!(!fire(&mut mgr), "an ally is not hit");
+		assert_eq!(mgr.human_index[0].hp(), 120);
+
+		mgr.set_friendly_fire_flag(0, true);
+		assert!(fire(&mut mgr), "with friendly fire on it is a hit");
+		let lost = 120 - mgr.human_index[0].hp();
+		assert!((14..=19).contains(&lost), "leg damage was {lost}");
+	}
+
+	// --- the game state --------------------------------------------------
+
+	#[test]
+	fn the_game_is_clear_when_the_enemy_side_has_no_health_left() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 0, 0.0, 0.0, 0.0, 0, 0.0);
+		place_human(&mut mgr, 1, 0.0, 0.0, 0.0, 1, 0.0);
+
+		// An enemy is alive.
+		assert_eq!(mgr.check_game_overor_complete(), 0);
+
+		// Its health runs out.
+		mgr.human_index[1].hit_grenade_explosion(1000);
+		assert!(mgr.human_index[1].hp() <= 0);
+		assert_eq!(mgr.check_game_overor_complete(), 1);
+	}
+
+	#[test]
+	fn the_game_is_over_when_the_player_is_a_corpse_and_a_draw_is_a_clear() {
+		let mut mgr = ObjectManager::new();
+		let mut d3dg = headless();
+		let resource = ResourceManager::new();
+		let config = config(false);
+		// A floor, so the human that has to survive the fall stands on something.
+		let (blocks, coll) = one_cube_map("gameover.bd1");
+		let mut sound = sound();
+
+		let alive = human_type_of(0);
+		mgr.human_index[0].set_pos_data(0.5, 2.3, 0.5, 0.0);
+		mgr.human_index[0].set_param_data(alive, 0, 0, 0, true);
+		mgr.human_index[0].object.set_enable_flag(true);
+
+		// No enemies at all is a clear, not a game over.
+		assert_eq!(mgr.check_game_overor_complete(), 1);
+
+		// An enemy keeps the mission going until the player falls.
+		mgr.human_index[1].set_pos_data(0.5, 2.3, 0.5, 0.0);
+		mgr.human_index[1].set_param_data(alive, 0, 0, 1, true);
+		mgr.human_index[1].object.set_enable_flag(true);
+		assert_eq!(mgr.check_game_overor_complete(), 0);
+
+		// Losing all health is not yet a game over: the body is still falling over, and
+		// the upstream waits for the motion to settle.
+		mgr.human_index[0].set_hit_flag(0.0);
+		mgr.human_index[0].hit_grenade_explosion(1000);
+		assert!(mgr.human_index[0].hp() <= 0);
+		assert_eq!(mgr.check_game_overor_complete(), 0);
+
+		// Which it does over the next frames of the death motion.
+		let mut frames = 0;
+		while frames < 400 && !mgr.human_index[0].dead_flag() {
+			mgr.process(
+				-1,
+				false,
+				false,
+				&mut d3dg,
+				&resource,
+				&coll,
+				&blocks,
+				None,
+				&mut sound,
+				&config,
+			);
+			frames += 1;
+		}
+
+		assert!(mgr.human_index[0].dead_flag(), "the fall ended in {frames} frames");
+		assert_eq!(mgr.check_game_overor_complete(), 2);
+	}
+
+	#[test]
+	fn the_object_info_tag_names_the_closest_thing_in_view_and_its_team() {
+		let mut mgr = ObjectManager::new();
+		place_human(&mut mgr, 1, 10.0, 0.0, 0.0, 1, 0.0);
+		// The player looks along +X from the origin, and the human is straight ahead: the
+		// angle to a target is atan2(z, x) - camera_rx, so a camera angle of zero points
+		// down +X.
+		mgr.human_index[0].set_param_data(0, 0, 0, 0, true);
+		mgr.human_index[0].object.set_enable_flag(true);
+
+		let (color, text) = mgr
+			.get_object_info_tag(0.0, 0.0, 0.0, 0.0, 0.0)
+			.expect("the human is in view");
+		assert_eq!(text, b"Human[1]  HP 120 : Enemy");
+		assert_eq!(color, D3DGraphics::get_color_code(1.0, 0.0, 0.0, 1.0));
+
+		// The same human on the player's team reads as a friend.
+		mgr.human_index[1].set_param_data(0, 0, 1, 0, true);
+		let (color, text) = mgr
+			.get_object_info_tag(0.0, 0.0, 0.0, 0.0, 0.0)
+			.expect("the human is in view");
+		assert_eq!(text, b"Human[1]  HP 120 : Friend");
+		assert_eq!(color, D3DGraphics::get_color_code(0.0, 0.0, 1.0, 1.0));
+
+		// Looking the other way finds nothing.
+		assert!(mgr.get_object_info_tag(0.0, 0.0, 0.0, PI, 0.0).is_none());
+
+		// And neither does a target past the fifty unit reach.
+		assert!(mgr.get_object_info_tag(-100.0, 0.0, 0.0, 0.0, 0.0).is_none());
+	}
+
+	// --- the sort --------------------------------------------------------
+
+	#[test]
+	fn the_effects_are_sorted_farthest_first_and_equal_distances_keep_their_order() {
+		let mut mgr = ObjectManager::new();
+
+		let add = |mgr: &mut ObjectManager, x: f32, z: f32| {
+			mgr.add_effect(
+				x, 0.0, z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 7, 0, 0, 1.0, 0.0,
+				effect_type::NORMAL, 100,
+			)
+		};
+
+		add(&mut mgr, 10.0, 0.0); // 0: 100 away squared
+		add(&mut mgr, 0.0, 0.0); // 1: on the camera
+		add(&mut mgr, 20.0, 0.0); // 2: 400 away squared
+		add(&mut mgr, 0.0, 5.0); // 3: 25 away squared
+		add(&mut mgr, 5.0, 0.0); // 4: also 25, added later
+
+		let mut data = [Effectdata::default(); MAX_EFFECT];
+		let count = mgr.sort_effect(0.0, 0.0, 0.0, &mut data);
+		assert_eq!(count, 5);
+
+		let ids: Vec<i32> = data.iter().take(count).map(|entry| entry.id).collect();
+		let dists: Vec<f32> = data.iter().take(count).map(|entry| entry.dist).collect();
+		assert_eq!(ids, vec![2, 0, 3, 4, 1]);
+		assert_eq!(dists, vec![400.0, 100.0, 25.0, 25.0, 0.0]);
+
+		// Disabled effects are not in the list at all.
+		mgr.effect_index[2].object.set_enable_flag(false);
+		let count = mgr.sort_effect(0.0, 0.0, 0.0, &mut data);
+		assert_eq!(count, 4);
+		assert_eq!(data[0].id, 0);
 	}
 }
