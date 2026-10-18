@@ -263,6 +263,11 @@ pub struct World<'a> {
 	/// One AI per human slot, indexed by the human's id. Upstream a file scope array,
 	/// `HumanAI[MAX_HUMAN]`, which the game screen alone drives.
 	pub ai: Vec<crate::ai::AIcontrol>,
+	/// The event lines that run alongside the game. Upstream `EventControl
+	/// Event[TOTAL_EVENTLINE]`, another file scope array, which is why it lives here rather
+	/// than on the game screen: the events outlive a screen, since a mission step is
+	/// followed by the next one and the lines keep their place.
+	pub events: [crate::event::EventControl; TOTAL_EVENTLINE],
 	pub block_data: BlockDataInterface,
 	pub point_data: PointDataInterface,
 	pub mif: Option<MIFInterface>,
@@ -296,6 +301,8 @@ impl<'a> World<'a> {
 			ai: (0..crate::objectmanager::MAX_HUMAN as i32)
 				.map(crate::ai::AIcontrol::new)
 				.collect(),
+			// `from_fn` rather than a repeated value, because an event line is not `Copy`.
+			events: std::array::from_fn(|_| crate::event::EventControl::new()),
 			block_data: BlockDataInterface::new(),
 			point_data: PointDataInterface::new(),
 			mif: None,

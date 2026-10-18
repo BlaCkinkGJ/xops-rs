@@ -630,6 +630,7 @@ impl D3DGraphics {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::core::degree_to_radian;
 
 	fn headless() -> D3DGraphics {
 		let instance = xops_platform::wgpu::Instance::new(&xops_platform::wgpu::InstanceDescriptor {
@@ -643,6 +644,55 @@ mod tests {
 	/// Transforms a point by the current modelview, the way a vertex would be.
 	fn in_view_space(graphics: &D3DGraphics, world: Vec3) -> Vec3 {
 		graphics.modelview().transform_point(world)
+	}
+
+	#[test]
+	fn the_camera_matches_the_browser_builds_recorded_matrix() {
+		// The reference transform, verbatim. The browser build's `?record=1` writes the
+		// uniform block of every draw, so this is the modelview the browser build itself used
+		// for the first block map strip of the training map, at frame 51, read out of that
+		// stream rather than reconstructed here.
+		//
+		// The camera is the one the same frame's debug overlay prints, to the two decimals it
+		// prints: `camera x:120.02 y:28.95 z:-174.95 rx:3.53 ry:-0.52`. That is why the
+		// tolerance is a hundredth rather than a millionth: the reference's inputs are only
+		// known to two decimal places, so the comparison is as precise as they are.
+		const REFERENCE: [f32; 16] = [
+			0.379_133_28, 0.462_671_49, -0.801_369_49, 0.0, //
+			0.0, 0.866_025_15, 0.500_000_48, 0.0, //
+			0.925_342_08, -0.189_566_82, 0.328_338_95, 0.0, //
+			207.396_21, -2.707_754, -53.209_976, 1.0, //
+		];
+
+		let mut graphics = headless();
+		graphics.set_camera(120.02, 28.95, -174.95, 3.53, -0.52, degree_to_radian(65.0));
+
+		let mine = graphics.modelview().m;
+
+		// The rotation: nine elements, and the reference's angles are known to two decimal
+		// places, so a thousandth either way is the inputs and not the arithmetic.
+		for i in [0, 1, 2, 4, 5, 6, 8, 9, 10] {
+			assert!(
+				(mine[i] - REFERENCE[i]).abs() < 5e-3,
+				"rotation element {i}: {} against the reference's {}",
+				mine[i],
+				REFERENCE[i]
+			);
+		}
+
+		// The translation is held far more loosely, and the reason is arithmetic rather than
+		// slack: it is the rotation applied to a camera 200 units from the origin, so a five
+		// thousandth error in an angle moves it by tens of thousandths. A tolerance of a
+		// couple of units here still fails loudly for anything that matters, because a wrong
+		// sign or a swapped axis moves the eye by hundreds.
+		for i in 12..15 {
+			assert!(
+				(mine[i] - REFERENCE[i]).abs() < 2.0,
+				"translation element {i}: {} against the reference's {}",
+				mine[i],
+				REFERENCE[i]
+			);
+		}
 	}
 
 	#[test]

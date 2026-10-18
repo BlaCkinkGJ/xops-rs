@@ -80,7 +80,7 @@ const OPTIONS_LICENSEMAXLINE_KOREAN: i32 = 14;
 
 /// The action names beside the 18 key binding rows, in the order
 /// `Options_p2LinkTextData[14 + i]` lists them. Upstream repeats the same draw call 18
-/// times with the label written out; the rows are one table here.
+/// times with the label written out, and the rows are one table here.
 const OPTIONS_KEY_NAMES: [&[u8]; 18] = [
 	b"TURN UP",
 	b"TURN DOWN",
@@ -1528,7 +1528,7 @@ impl<'a> MainMenu<'a> {
 
 		if !window.change_window_mode(fullscreen) {
 			// A window that cannot switch at all. Upstream returns 2 here and exits the
-			// game; the caller only tells 0 from non-zero, and the host owns the exit.
+			// game. The caller only tells 0 from non-zero, and the host owns the exit.
 			return 1;
 		}
 

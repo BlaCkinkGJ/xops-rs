@@ -2346,6 +2346,22 @@ impl ObjectManager {
 		self.get_human_object_mut(self.player_human_id)
 	}
 
+	/// The human pool and the weapon pool together.
+	///
+	/// `human::SetWeapon` registers the weapons it is handed as held, which is a flag on
+	/// the weapon itself, so the two pools have to be borrowed at once. Upstream both are
+	/// file scope arrays and this is what the debug console's delete operations need.
+	pub fn humans_and_weapons(&mut self) -> (&mut [Human], &mut [Weapon]) {
+		(&mut self.human_index, &mut self.weapon_index)
+	}
+
+	/// The weapon pool, which the weapon type lookups need: `human::GetWeaponBlazingmode`
+	/// and `human::GetMainWeaponTypeNO` both read a weapon the human only holds the index
+	/// of. Upstream the two pools are file scope arrays and this is a plain read.
+	pub fn weapons(&self) -> &[Weapon] {
+		&self.weapon_index
+	}
+
 	/// `GetHumanObjectID`. Upstream compares the two pointers, and comparing the two
 	/// addresses is the same question here.
 	pub fn get_human_object_id(&self, object: &Human) -> i32 {

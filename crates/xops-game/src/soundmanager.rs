@@ -166,6 +166,16 @@ impl<'a> SoundManager<'a> {
 		self.param = in_param;
 	}
 
+	/// The sound class the manager was built over.
+	///
+	/// Upstream the asset loaders and the debug console reach the file scope `SoundCtrl`
+	/// directly, and this is that reach: the game screen loads and releases an additional
+	/// small object's sound through the resource class, which needs the control rather
+	/// than the manager, and reports the loaded sound count from it.
+	pub fn sound_ctrl(&mut self) -> Option<&mut SoundControl> {
+		self.sound_ctrl.as_deref_mut()
+	}
+
 	/// `SoundManager::InitWorldSound`: forget everything queued.
 	pub fn init_world_sound(&mut self) {
 		self.change_ab = false;

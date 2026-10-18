@@ -102,6 +102,27 @@ impl InputControl {
 		self.mouse_limit_flag = flag;
 	}
 
+	/// Sets one key's state directly, for a test.
+	///
+	/// A test cannot reach the platform's key table either: `winit::event::KeyEvent` has a
+	/// `pub(crate)` field, so no one outside winit can build a keyboard event. This is the
+	/// one door into the table, and it exists only in a test build.
+	#[cfg(test)]
+	pub fn set_key_state(&mut self, code: i32, down: bool) {
+		if (0..256).contains(&code) {
+			self.keys[code as usize] = if down { 0x80 } else { 0x00 };
+		}
+	}
+
+	/// The frame step on its own, for a test: this frame's keys become the previous
+	/// frame's, which is all an edge check needs. The rest of
+	/// [`InputControl::get_input_state`] takes its state from the platform, which a test
+	/// cannot drive.
+	#[cfg(test)]
+	pub fn advance_frame(&mut self) {
+		self.keys_lt = self.keys;
+	}
+
 	/// `GetInputState`: takes this frame's state out of the platform.
 	///
 	/// `mousemode` is upstream's: false stores the cursor position in client coordinates,
