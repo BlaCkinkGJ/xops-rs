@@ -1294,10 +1294,10 @@ fn change_exe_path_to_full_path(dir: &[u8], fname: &mut [u8; MAX_PATH]) -> bool 
 	let mut index = 0usize;
 	for prefix in [
 		ADDONDIR.to_vec(),
-		[b'\\'].iter().chain(ADDONDIR).copied().collect(),
-		[b'/'].iter().chain(ADDONDIR).copied().collect(),
-		[b'.', b'\\'].iter().chain(ADDONDIR).copied().collect(),
-		[b'.', b'/'].iter().chain(ADDONDIR).copied().collect(),
+		b"\\".iter().chain(ADDONDIR).copied().collect(),
+		b"/".iter().chain(ADDONDIR).copied().collect(),
+		b".\\".iter().chain(ADDONDIR).copied().collect(),
+		b"./".iter().chain(ADDONDIR).copied().collect(),
 	] {
 		if name.len() >= prefix.len() && name[..prefix.len()] == prefix[..] {
 			index = prefix.len();

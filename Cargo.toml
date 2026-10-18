@@ -66,6 +66,10 @@ manual_memcpy = "allow"
 type_complexity = "allow"
 large_enum_variant = "allow"
 new_without_default = "allow"
+#   needless_late_init -- `let id; ... id = ...` inside a `match` is upstream's
+#     switch: declare at the top, assign in the arms that do not return. The comment
+#     in the code says the initialisers are unnecessary and the compiler checks it.
+needless_late_init = "allow"
 
 [profile.release]
 opt-level = 3
