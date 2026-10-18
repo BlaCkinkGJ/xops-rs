@@ -897,6 +897,7 @@ impl<'a> MainGame<'a> {
 			// The direction from the mouse.
 			self.mouse_rx += mouse_x as f32 * mouse_sensitivity;
 			self.mouse_ry -= mouse_y as f32 * mouse_sensitivity;
+			xops_platform::trace::aim(self.mouse_rx, self.mouse_ry);
 
 			// The direction from the keys, eased towards the arrow key angle.
 			let up = self.check_input_control(input_ctrl, config, ControlKey::KEY_TURNUP, 0);

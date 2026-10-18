@@ -43,6 +43,19 @@ pub enum Stage<'a> {
 }
 
 impl<'a> Stage<'a> {
+	/// The screen's name, for the trace: a report about a menu and one about a mission
+	/// have nothing in common.
+	pub fn name(&self) -> &'static str {
+		match self {
+			Stage::Idle(_) => "idle",
+			Stage::Opening(_) => "opening",
+			Stage::Menu(_) => "menu",
+			Stage::Briefing(_, _) => "briefing",
+			Stage::MainGame(_) => "mission",
+			Stage::Result(_, _) => "result",
+		}
+	}
+
 	/// The world back, so the next screen can have it. Consumes the stage, since the world
 	/// was its only reason to exist.
 	pub fn into_world(self) -> Box<World<'a>> {

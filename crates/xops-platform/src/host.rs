@@ -7,6 +7,7 @@
 //! here so that the game crate can name them without naming a window type, the same way it
 //! draws without naming a wgpu type.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -124,6 +125,21 @@ pub fn sleep_millis(millis: u32) {
 	}
 }
 
+/// Whether the game is using the mouse to look, which decides whether the cursor is held.
+///
+/// The host sets it each frame from the flag the game sets, because the game's own per-frame
+/// cursor warp has to know: a warp while the cursor is held cancels the hold.
+static LOOKING: AtomicBool = AtomicBool::new(false);
+
+/// Records whether the game is looking, for [`HostWindow::set_cursor_position`].
+pub fn set_looking(looking: bool) {
+	LOOKING.store(looking, Ordering::Relaxed);
+}
+
+fn looking() -> bool {
+	LOOKING.load(Ordering::Relaxed)
+}
+
 /// The window, as much of it as the game's window code uses, the upstream `WindowControl`.
 ///
 /// It may have no window yet: upstream ran `ErrorInfo` before `InitWindow`, so the
@@ -210,8 +226,25 @@ impl HostWindow {
 	/// one) reports that here, and it is dropped rather than handled, because the upstream
 	/// ignored `SetCursorPos`'s result too and the game plays on either way.
 	pub fn set_cursor_position(&self, x: f64, y: f64) {
+		// Skipped while the game is looking, and that is not an optimisation.
+		//
+		// The game asks for this every frame, which is the original's `MoveMouseCenter`: on
+		// Windows the cursor had to be kept away from the edge of the window. Two things go
+		// wrong with it here. warping a cursor that is held does nothing useful, because a
+		// held cursor does not move; and on macOS the warp re-associates the pointer with
+		// the cursor, which cancels the hold that the look depends on, so the warp undoes
+		// the grab every frame it is called. The movement does not come from the cursor's
+		// position in any case, so nothing is lost by leaving it alone.
+		if looking() {
+			crate::trace::warp(false);
+			return;
+		}
+
 		if let Some(window) = &self.window {
-			let _ = window.set_cursor_position(PhysicalPosition::new(x, y));
+			let result = window.set_cursor_position(PhysicalPosition::new(x, y));
+			crate::trace::warp(result.is_ok());
+		} else {
+			crate::trace::warp(false);
 		}
 	}
 

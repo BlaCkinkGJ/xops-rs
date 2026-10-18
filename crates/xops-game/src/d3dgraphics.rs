@@ -138,6 +138,15 @@ impl D3DGraphics {
 		self.width = width;
 		self.height = height;
 		self.gfx.resize(width as u32, height as u32);
+
+		// The HUD weapon's screen position is derived from the screen size, so it has to be
+		// derived again when the screen changes. Upstream gets this for free by rerunning
+		// `InitD3D` on a resolution change; here the screen can change at any moment,
+		// because the window is fitted to the display before the game is even built. Left
+		// stale, the held weapon is placed for the old screen and is drawn in the wrong
+		// part of the HUD, which is exactly what it looked like.
+		self.hud_myweapon_x = [width as f32 - 140.0, width as f32 - 72.0];
+		self.hud_myweapon_y = [height as f32 - 40.0, height as f32 - 25.0];
 	}
 
 	pub fn width(&self) -> i32 {
@@ -493,6 +502,19 @@ impl D3DGraphics {
 		let height = self.height as f32;
 		let size = size * (0.0004 * height * height - 0.92 * height + 650.0) / 1000.0;
 
+		// Where this ended up, for the trace. This is the one draw whose screen position,
+		// distance and scale are all computed, so it is the one that depends on the size the
+		// game believes the screen is and on the projection matching it.
+		xops_platform::trace::viewmodel(
+			screen.x,
+			screen.y,
+			((object.x - self.camera_x * -1.0).powi(2)
+				+ (object.y - self.camera_y).powi(2)
+				+ (object.z - self.camera_z).powi(2))
+			.sqrt(),
+			size,
+		);
+
 		let to_degrees = 180.0 / std::f32::consts::PI;
 		self.gfx.translate(object.x, object.y, object.z);
 		self.gfx.rotate(camera_rx * to_degrees, 0.0, 1.0, 0.0);
@@ -723,6 +745,32 @@ mod tests {
 		graphics.set_world_transform(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 		let point = in_view_space(&graphics, Vec3::new(-10.0, 0.0, 0.0));
 		assert!((point.z - -10.0).abs() < 1e-3, "{point:?}");
+	}
+
+	#[test]
+	fn the_hud_weapons_place_follows_the_screen_size() {
+		// The weapon drawn in the HUD is placed from its screen offsets, and those are
+		// worked out from the screen size. They were worked out once, when the renderer was
+		// built, and the window is fitted to the display after that: the game then placed
+		// the weapon as if the screen were its old size, which put it in the wrong part of
+		// the HUD. Resizing has to move the place with it.
+		let mut d3dg = headless();
+		d3dg.set_size(1280, 960);
+		let (x, y, z) = d3dg.hud_weapon_offset(0);
+		assert_eq!((x, y, z), (1140.0, 920.0, 0.86), "the held weapon's place");
+		assert_eq!(d3dg.hud_weapon_offset(1), (1208.0, 935.0, 0.93), "the reserve's");
+
+		d3dg.set_size(1920, 1080);
+		assert_eq!(
+			d3dg.hud_weapon_offset(0),
+			(1780.0, 1040.0, 0.86),
+			"the place follows the new size"
+		);
+
+		// A screen size of nothing is refused rather than stored, which would divide by zero
+		// in the aspect the projection uses.
+		d3dg.set_size(0, 1080);
+		assert_eq!(d3dg.hud_weapon_offset(1), (1848.0, 1055.0, 0.93), "unchanged");
 	}
 
 	#[test]

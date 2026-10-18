@@ -110,3 +110,26 @@ the two disagree.
   cannot move at all. The raw device events carry the mouse's own motion and no warp
   produces them, which is why the movement comes from there. The cursor's position is
   still tracked, because the menus read that instead.
+
+- **The game's screen size is its own, and everything drawn in screen
+  coordinates is derived from it.** `D3DGraphics` keeps a width and height and
+  works the HUD weapon's place out from them. The window is fitted to the
+  display after the renderer is built, so those numbers move; `set_size` has to
+  move the derived places with them, or the weapon is drawn for a screen that no
+  longer exists. Upstream gets this for free by rerunning `InitD3D` on a
+  resolution change.
+- **Do not ask the window for a redraw every frame.** The game presents its own
+  frame at the end of its own step, so the request asks for nothing, and it is
+  answered immediately with a `RedrawRequested` that lands back in
+  `about_to_wait`: the loop then runs around itself hundreds of thousands of
+  times a second, one core at full tilt, while the frames it is meant to be
+  pacing get what is left.
+- **The cursor is held, and the game's own warp is skipped while it is.** macOS
+  supports only `CursorGrabMode::Locked` (asking for `Confined` is refused, and
+  discarding that error hides it), and `Locked` is what mouse look wants: the
+  pointer stops moving the cursor and every mouse event carries the movement as
+  a delta, which is where the game's movement comes from. Two traps come with
+  it: the game asks for a cursor warp every frame, and on macOS that warp
+  re-associates the pointer with the cursor, cancelling the hold it depends on;
+  and the movement must be read from those deltas, never from the cursor's
+  position, because the warp is itself a move.

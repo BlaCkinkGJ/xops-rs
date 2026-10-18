@@ -120,6 +120,7 @@ impl Input {
 		}
 		self.delta_x = 0;
 		self.delta_y = 0;
+		crate::trace::movement_taken(dx, dy);
 		(dx, dy)
 	}
 
@@ -211,6 +212,7 @@ impl Input {
 		if !self.captured {
 			return;
 		}
+		crate::trace::motion(delta.0, delta.1);
 		self.delta_x += delta.0.round() as i32;
 		self.delta_y += delta.1.round() as i32;
 	}

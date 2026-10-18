@@ -268,6 +268,15 @@ impl Shell {
 
 impl App for Shell {
 	fn init(&mut self, window: &Arc<Window>, gfx: Gfx) {
+		// Which build this is, first thing: a debug build runs the game's own frame slower
+		// than the frame step, and every "the frame rate is wrong" report has to rule it
+		// out before anything else is worth measuring.
+		xops_platform::trace::note(if cfg!(debug_assertions) {
+			"this is a debug build, which runs the game's frame far slower than a release one"
+		} else {
+			"this is a release build"
+		});
+
 		if let Err(error) = self.prepare(HostWindow::new(window.clone())) {
 			eprintln!("xops: {error}");
 			std::process::exit(1);
@@ -338,6 +347,14 @@ impl App for Shell {
 
 	fn event(&mut self, _event: &WindowEvent) -> bool {
 		true
+	}
+
+	fn screen(&self) -> &'static str {
+		self.game
+			.as_ref()
+			.and_then(|game| game.stage.as_ref())
+			.map(|stage| stage.name())
+			.unwrap_or("starting")
 	}
 }
 

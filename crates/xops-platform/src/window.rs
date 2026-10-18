@@ -10,10 +10,11 @@ use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 
 use crate::gfx::Gfx;
 use crate::input::Input;
+use crate::trace;
 
 /// Processing time per frame, from the upstream `GAMEFRAMEMS`.
 pub const FRAME_MS: u64 = 30;
@@ -52,6 +53,11 @@ pub trait App {
 		let _ = event;
 		true
 	}
+
+	/// Which screen is up, for the trace. "menu" and "mission" are different reports.
+	fn screen(&self) -> &'static str {
+		"unknown"
+	}
 }
 
 struct Host<A: App> {
@@ -59,6 +65,12 @@ struct Host<A: App> {
 	window: Option<Arc<Window>>,
 	input: Input,
 	next_frame: Instant,
+	/// When the last frame started, which is what the actual frame interval is measured
+	/// against: the game asks for a rate, and this is the one it gets.
+	last_frame_start: Instant,
+	/// When the last burst of frames ended, which is what the loop's idle time is measured
+	/// from.
+	last_burst_end: Option<Instant>,
 	frames: u64,
 	/// Whether the cursor is currently kept in the window. Tracked so the platform is only
 	/// told when it changes.
@@ -110,7 +122,6 @@ impl<A: App> ApplicationHandler for Host<A> {
 			}
 		};
 
-		window.request_redraw();
 		self.window = Some(window.clone());
 		self.next_frame = Instant::now();
 		self.app.init(&window, gfx);
@@ -157,15 +168,28 @@ impl<A: App> ApplicationHandler for Host<A> {
 			return;
 		}
 
+		// What the host gained or lost between the last burst and this one. A value near
+		// the frame step is the loop working, and a second is the loop asleep.
+		let idle = self.last_burst_end.map(|end| end.elapsed().as_secs_f64() * 1000.0);
+		if let Some(idle) = idle {
+			trace::wait(idle);
+		}
+
 		// Run every frame that is due. A hitch longer than a step catches up rather than
 		// skipping, but only up to a bound: a long stall (a debugger, a breakpoint) must
 		// not queue hundreds of frames.
 		let mut due = 0;
 		while Instant::now() >= self.next_frame && due < 4 {
+			let started = Instant::now();
+			let interval = started.duration_since(self.last_frame_start).as_secs_f64() * 1000.0;
+			self.last_frame_start = started;
 			if !self.app.frame(&mut self.input) {
 				event_loop.exit();
 				return;
 			}
+			trace::frame(started.elapsed().as_secs_f64() * 1000.0, interval);
+			trace::screen(self.app.screen(), self.input.is_captured());
+			trace::report();
 			self.input.end_frame();
 			self.next_frame += frame_step();
 			self.frames += 1;
@@ -178,10 +202,13 @@ impl<A: App> ApplicationHandler for Host<A> {
 
 		self.sync_cursor();
 
-		if let Some(window) = &self.window {
-			window.request_redraw();
-		}
-
+		// No `request_redraw` here. The game presents its own frame at the end of its own
+		// step, so a redraw request asks for nothing; worse, it is answered immediately
+		// with a `RedrawRequested`, which comes back through `window_event` and lands in
+		// `about_to_wait` again. That is an endless loop around the event loop, burning a
+		// core and running hundreds of thousands of times a second while the game's frames
+		// themselves are paced by the wait below.
+		self.last_burst_end = Some(Instant::now());
 		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
 }
@@ -233,13 +260,24 @@ impl<A: App> Host<A> {
 		}
 		self.cursor_captured = looking;
 
+		// The flag the cursor warp reads, so the game's own per-frame warp can be skipped
+		// while the cursor is held. It has to be: see `set_cursor_position`.
+		crate::host::set_looking(looking);
+
 		let Some(window) = &self.window else {
 			return;
 		};
-		// Hidden while the game is looking, and nothing more. The game warps the cursor to
-		// the middle of the window every frame, so it cannot wander off, and the movement
-		// comes from the raw device events rather than from where the cursor ended up. A
-		// grab would only be a way for a platform to stop delivering those.
+
+		// `Locked` is the only mode macOS implements, and it is exactly the one the game
+		// wants: the system stops moving the cursor with the mouse and every mouse event
+		// carries the movement as a delta instead, which is where the game's movement comes
+		// from. (`Confined` is refused there, so asking for it does nothing at all.)
+		let mode = if looking {
+			CursorGrabMode::Locked
+		} else {
+			CursorGrabMode::None
+		};
+		let _ = window.set_cursor_grab(mode);
 		window.set_cursor_visible(!looking);
 	}
 
@@ -249,6 +287,8 @@ impl<A: App> Host<A> {
 			window: None,
 			input: Input::default(),
 			next_frame: Instant::now(),
+			last_frame_start: Instant::now(),
+			last_burst_end: None,
 			frames: 0,
 			cursor_captured: false,
 		}

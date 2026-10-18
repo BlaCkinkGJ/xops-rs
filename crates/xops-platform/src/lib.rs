@@ -16,6 +16,7 @@ pub mod input;
 pub mod path;
 pub mod sound;
 pub mod texture;
+pub mod trace;
 pub mod window;
 
 /// Re-exported so the binary and the game crate name one version of the window types.
