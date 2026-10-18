@@ -11,6 +11,8 @@ pub mod datafile;
 pub mod d3dgraphics;
 pub mod debug;
 pub mod gui_object;
+pub mod human;
+pub mod motion;
 pub mod input;
 pub mod map;
 pub mod model;

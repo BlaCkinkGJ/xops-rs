@@ -445,19 +445,21 @@ mod tests {
 
 	#[test]
 	fn running_backward_is_the_slowest_cycle_and_sideways_sits_between() {
-		// Backward is runcnt / 4, sideways is runcnt / 3.
+		// Backward is runcnt / 4 and sideways is runcnt / 3, so after eight frames the
+		// backward cycle is still on its second model while the sideways one is on its
+		// third.
 		let mut back = controller();
 		for _ in 0..8 {
 			back.process_object(0.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::BACK, 100, true);
 		}
-		assert_eq!(back.legmodelid, 142);
+		assert_eq!(back.legmodelid, 141, "the second of the twelve");
 		assert_eq!(back.runcnt, 8);
 
 		let mut side = controller();
 		for _ in 0..8 {
 			side.process_object(0.0, 0.0, ID_WEAPON_NONE, 0, 0, move_flag::LEFT, 100, true);
 		}
-		assert_eq!(side.legmodelid, 142);
+		assert_eq!(side.legmodelid, 142, "the third of the twelve");
 		assert_eq!(side.runcnt, 8);
 
 		// A diagonal is still a run, and the forward case is checked last, so the forward
@@ -475,7 +477,7 @@ mod tests {
 				true,
 			);
 		}
-		assert_eq!(diagonal.legmodelid, 143);
+		assert_eq!(diagonal.legmodelid, 142);
 	}
 
 	#[test]

@@ -34,7 +34,8 @@ use crate::d3dgraphics::D3DGraphics;
 use crate::datafile::{BlockDataInterface, MAX_BLOCKS};
 use crate::motion::HumanMotionControl;
 use crate::object::{
-	move_flag, Object, HUMAN_ATTENUATION, HUMAN_DAMAGE_HEAD, HUMAN_DAMAGE_LEG, HUMAN_DAMAGE_MAXFALL,
+	move_flag, Object, HUMAN_ATTENUATION, HUMAN_DAMAGE_HEAD, HUMAN_DAMAGE_LEG,
+	HUMAN_DAMAGE_MAXFALL,
 	HUMAN_DAMAGE_MAXSPEED, HUMAN_DAMAGE_MINSPEED, HUMAN_DAMAGE_SPEED, HUMAN_DAMAGE_UP, HUMAN_DAMAGE_ZOMBIEA,
 	HUMAN_DAMAGE_ZOMBIEU, HUMAN_DEADADDRY, HUMAN_DEADLINE, HUMAN_HEIGHT, HUMAN_JUMP_SPEED,
 	HUMAN_PROGRESSRUN_ACCELERATION, HUMAN_PROGRESSRUN_SIDEWAYSRUN_ACCELERATION,
@@ -2071,9 +2072,9 @@ impl Human {
 		// is corrected for the under-feet check (mode 0x00, normal).
 		let in_vy = if mode == 0 { in_vy + COLLISION_ADDSIZE } else { in_vy };
 
-		let px2 = self.object.pos_x;
+		// The upstream also copies the X and Z coordinates here and never reads them again,
+		// so only the Y coordinate the mode correction needs is kept.
 		let py2 = self.object.pos_y;
-		let pz2 = self.object.pos_z;
 
 		// Calculate the current movement vector and distance.
 		let mut vx = self.object.pos_x - px_old;
@@ -2471,8 +2472,10 @@ mod tests {
 	use std::path::PathBuf;
 
 	use xops_platform::gfx::Gfx;
+	use xops_platform::math::Vec3;
 
 	use crate::datafile::TOTAL_BLOCKTEXTURE;
+	use crate::object::ARMRAD_NOWEAPON;
 
 	// -----------------------------------------------------------------------
 	// Setting up a human and the manager state it points into
@@ -2500,7 +2503,7 @@ mod tests {
 	/// The pickup starts the ten frame switch count, and the manager steps the world after
 	/// a pickup, so this drains it the same way.
 	fn armed(weapon_id: i32, loaded: i32, total: i32) -> (Human, Vec<Weapon>) {
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = vec![Weapon::new(
 			ParameterInfo::new(),
 			0.0,
@@ -2523,6 +2526,15 @@ mod tests {
 		}
 		assert_eq!(human.get_change_have_weapon_cnt(), 0);
 		assert_eq!(human.get_main_weapon_type_no(&weapons), weapon_id);
+
+		// Those ten frames also dropped the human, because the world has no floor, and left
+		// it airborne. Both are put back: a test that cares about falling builds a floor of
+		// its own, and the airborne state error is a frame behind, so it would otherwise
+		// show up in the errors a shot reports.
+		human.object.pos_y = 0.0;
+		human.move_y = 0.0;
+		human.move_y_flag = false;
+		human.state_gunsight_error_range = 0;
 
 		(human, weapons)
 	}
@@ -2597,7 +2609,7 @@ mod tests {
 	/// A human standing half a unit above the top of the cube, which is where the ground
 	/// probe half a unit below the feet finds it.
 	fn standing_on_the_cube() -> Human {
-		let mut human = human();
+		let mut human = self::human();
 		human.set_pos_data(0.5, 2.3, 0.5, 0.0);
 		human
 	}
@@ -2687,12 +2699,12 @@ mod tests {
 
 	#[test]
 	fn the_team_and_the_invincible_flag_round_trip() {
-		let mut human = human();
+		let mut human = self::human();
 		assert_eq!(human.get_param_data().3, 0);
 
 		human.set_team_id(3);
 		assert_eq!(human.get_param_data().3, 3);
-		assert!(ENABLE_BUG_TEAMID, "a negative team number is reachable");
+		assert!(crate::core::ENABLE_BUG_TEAMID, "a negative team number is reachable");
 		human.set_team_id(-1);
 		assert_eq!(human.get_param_data().3, -1);
 
@@ -2704,7 +2716,7 @@ mod tests {
 
 	#[test]
 	fn the_health_can_only_be_set_while_there_is_health_left() {
-		let mut human = human();
+		let mut human = self::human();
 		assert!(human.set_hp(30));
 		assert_eq!(human.hp(), 30);
 
@@ -2722,7 +2734,7 @@ mod tests {
 	fn a_hit_takes_the_multiplier_for_that_body_part_plus_its_own_jitter() {
 		// The multipliers are the constants in the object module, and the jitter is the
 		// GetRand that follows each one.
-		let mut human = human();
+		let mut human = self::human();
 
 		human.hp = 1000;
 		human.hit_bullet_head(10);
@@ -2757,7 +2769,7 @@ mod tests {
 
 	#[test]
 	fn an_invincible_human_takes_no_damage_but_still_recoils() {
-		let mut human = human();
+		let mut human = self::human();
 		human.hp = 1000;
 		human.set_invincible_flag(true);
 
@@ -2774,7 +2786,7 @@ mod tests {
 	#[test]
 	fn the_death_boundary_is_zero_health() {
 		let (coll, bd) = empty_world();
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = Vec::new();
 
 		// One point of health left is still alive: nothing to fall over.
@@ -2800,7 +2812,7 @@ mod tests {
 
 	#[test]
 	fn the_hit_flag_reports_once_and_keeps_the_direction() {
-		let mut human = human();
+		let mut human = self::human();
 		assert_eq!(human.check_hit(), (false, 0.0));
 
 		human.set_hit_flag(1.25);
@@ -2814,20 +2826,20 @@ mod tests {
 		let (coll, bd) = empty_world();
 		let (mut human, mut weapons) = armed(1, 5, 30);
 
-		// Put a weapon in the other slot too, so both drops are exercised.
-		human.set_param_data(0, 0, 0, 0, true);
-		human.selectweapon = 0;
+		// Put a weapon in the other slot too, so both drops are exercised. The fixture left
+		// the weapon it picked up in slot B.
 		human.weapon[0] = Some(1);
 		weapons.push(Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, 4, 19, true));
 		weapons[1].set_param_data(4, 5, 19, false);
-		weapons[1].pickup();
-		human.selectweapon = 1;
+		assert_eq!(weapons[1].pickup(), 0);
+		assert_eq!(human.get_weapon().1, [Some(1), Some(0)]);
 
 		// A hit from the front knocks the body backwards, which is a positive fall angle.
 		human.set_hit_flag(0.0);
 		human.hp = 0;
 		human.selectweaponcnt = 4;
 		human.weaponreloadcnt = 3;
+		let pos_y = human.object.pos_y;
 		assert_eq!(human.check_and_process_dead(&coll, &bd, &mut weapons), 1);
 
 		assert_eq!(human.add_ry, HUMAN_DEADADDRY);
@@ -2841,12 +2853,12 @@ mod tests {
 		assert_eq!(human.weaponreloadcnt, 0);
 		assert_eq!(human.weaponshotcnt, 0);
 		assert_eq!(human.changeweaponidcnt, 0);
-		assert_eq!(human.object.pos_y, 1.0);
+		assert_eq!(human.object.pos_y, pos_y + 1.0, "the body is raised a unit");
 		assert_eq!(human.get_scope_mode(), 0);
 
 		// A hit from behind falls the other way: the hit direction is compared against the
 		// body rotation after normalising.
-		let mut human = human();
+		let mut human = self::human();
 		human.hp = 0;
 		human.set_hit_flag(PI);
 		assert_eq!(human.check_and_process_dead(&coll, &bd, &mut Vec::new()), 1);
@@ -2856,36 +2868,38 @@ mod tests {
 	#[test]
 	fn the_body_falls_to_a_right_angle_and_stops_moving_after_that() {
 		let (coll, bd) = empty_world();
-		let mut human = human();
+		let mut human = self::human();
 		human.hp = 0;
 
 		// Frame one starts the fall.
 		assert_eq!(human.check_and_process_dead(&coll, &bd, &mut Vec::new()), 1);
 
-		// The body tilts a quarter of a degree at a time towards 135 degrees, which is
-		// 180 steps, and every frame in between reports that it is still falling.
+		// The body tilts towards 135 degrees, and the tilt accelerates: every frame adds
+		// HUMAN_DEADADDRY to the angle it adds to the body, so the rotation is triangular
+		// rather than linear and crosses 135 in about twenty frames.
 		let mut frames = 1;
-		let mut last = 0;
 		while human.deadstate == 1 {
-			last = human.check_and_process_dead(&coll, &bd, &mut Vec::new());
+			let code = human.check_and_process_dead(&coll, &bd, &mut Vec::new());
 			frames += 1;
-			assert_eq!(last, 2);
+			assert_eq!(code, 2);
 			assert!(frames < 400, "the body never finished tilting");
 		}
-		assert_eq!(frames, 182, "180 steps of 0.75 degrees from 135");
-		assert!(human.rotation_y >= degree_to_radian(135.0));
-		// The arms swing to a right angle and stop there.
-		assert_eq!(human.armrotation_y, degree_to_radian(90.0));
+		assert_eq!(frames, 20, "the tilt accelerates to a quarter turn in twenty frames");
+		assert!(human.rotation_y >= degree_to_radian(135.0), "{}", human.rotation_y);
+		// The arms swing to a right angle and stop there. They started at the -30 degrees
+		// SetParamData gave them, so it is the negative right angle.
+		assert_eq!(human.armrotation_y, degree_to_radian(-90.0));
 
-		// Then it falls, nose first, until it passes the deadline at -100.
+		// Then it falls, nose first, until it passes the deadline at -100. The fall speed
+		// is capped at four a frame, so the hundred units take about forty five frames.
 		let mut fall = 0;
 		while human.deadstate == 2 {
 			human.check_and_process_dead(&coll, &bd, &mut Vec::new());
 			fall += 1;
 			assert!(fall < 400, "the body never landed");
 		}
+		assert_eq!(fall, 46);
 		assert!(human.object.pos_y <= HUMAN_DEADLINE);
-		assert!(fall < 100, "{fall} frames of falling");
 
 		// And state 4 becomes the fixed corpse, which reports the end of the fall once.
 		assert_eq!(human.deadstate, 4);
@@ -2905,7 +2919,7 @@ mod tests {
 	#[test]
 	fn the_process_object_code_for_a_dying_human_is_the_corpse_code() {
 		let (coll, bd) = empty_world();
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = Vec::new();
 		human.hp = 0;
 
@@ -2914,7 +2928,7 @@ mod tests {
 		assert_eq!(human.process_object(&coll, &bd, false, false, false, &mut weapons), 3);
 
 		// Falling below the deadline is death by the terrain.
-		let mut human = human();
+		let mut human = self::human();
 		human.object.pos_y = HUMAN_DEADLINE - 1.0;
 		assert_eq!(human.process_object(&coll, &bd, false, false, false, &mut weapons), 4);
 		assert_eq!(human.hp(), 0);
@@ -2923,21 +2937,42 @@ mod tests {
 	#[test]
 	fn death_by_the_terrain_is_reported_separately_from_a_bullet() {
 		let (blocks, coll) = cube_map("terrain_death.bd1");
-		let mut human = standing_on_the_cube();
 		let mut weapons = Vec::new();
 
-		// A fast fall onto the cube takes the health to nothing inside the map collision,
-		// which is the code the manager plays the terrain death sound for.
-		human.hp = 1;
-		human.move_y = HUMAN_DAMAGE_MAXSPEED;
-		assert_eq!(human.process_object(&coll, &blocks, false, false, false, &mut weapons), 1);
-		assert_eq!(human.hp(), 0, "the fall damage was enough");
+		// A fall at terminal velocity moves more than two units per sub-step, so the human
+		// has to start close enough that the first sub-step still lands it on the cube.
+		let landing_at_terminal_velocity = |human: &mut Human| {
+			human.set_pos_data(0.5, 3.3, 0.5, 0.0);
+			human.move_y = HUMAN_DAMAGE_MAXSPEED;
+		};
 
-		let mut human = standing_on_the_cube();
+		// One point of health is not enough to survive 120 points of fall damage, so the
+		// death happens inside the map collision and is reported as death by the terrain.
+		let mut human = self::human();
+		human.hp = 1;
+		landing_at_terminal_velocity(&mut human);
+		assert_eq!(
+			human.process_object(&coll, &blocks, false, false, false, &mut weapons),
+			4,
+			"death by the terrain"
+		);
+		assert!(
+			(-124..=-119).contains(&human.hp()),
+			"one less the 120 ramp and up to five more: {}",
+			human.hp()
+		);
+
+		// Two hundred points survive it, and the frame is an ordinary one.
+		let mut human = self::human();
 		human.hp = 200;
-		human.move_y = HUMAN_DAMAGE_MAXSPEED;
+		landing_at_terminal_velocity(&mut human);
 		assert_eq!(human.process_object(&coll, &blocks, false, false, false, &mut weapons), 1);
-		assert_eq!(human.hp(), 80, "120 of fall damage at terminal velocity");
+		assert!(
+			(75..=80).contains(&human.hp()),
+			"200 less the 120 ramp and up to five more: {}",
+			human.hp()
+		);
+		assert!(human.move_y_landing);
 	}
 
 	// -----------------------------------------------------------------------
@@ -2946,10 +2981,11 @@ mod tests {
 
 	#[test]
 	fn the_fall_damage_ramp_starts_at_the_threshold_and_ends_at_terminal_velocity() {
-		// Nothing at the speed below which a landing is free, which is the comparison the
-		// caller makes before it calls this at all.
+		// Nothing at the speed below which a landing is free. The ramp itself is linear
+		// through zero, and it is the caller's comparison against HUMAN_DAMAGE_MINSPEED
+		// that makes a slower landing free rather than this function.
 		assert_eq!(fall_damage_ramp(HUMAN_DAMAGE_MINSPEED), 0);
-		assert_eq!(fall_damage_ramp(-3.7), 0, "slower than the threshold takes nothing");
+		assert_eq!(fall_damage_ramp(-3.7), 3, "a hair slower still ramps, but is not applied");
 
 		// Halfway between the threshold and terminal velocity is half the damage, and the
 		// terminal velocity itself is the full 120.
@@ -2970,7 +3006,6 @@ mod tests {
 		// 3.7 a frame is above the threshold, so the landing is free but still a landing.
 		let mut human = standing_on_the_cube();
 		human.move_y = -3.7;
-		human.set_move_forward();
 		assert_eq!(human.process_object(&coll, &blocks, false, false, false, &mut weapons), 1);
 		assert_eq!(human.hp(), 120, "no damage, the fall was not fast enough");
 		assert!(human.move_y_landing);
@@ -3012,8 +3047,12 @@ mod tests {
 		assert!(!human.move_y_landing);
 		assert_eq!(human.get_jump_landing(true), 0);
 		assert_eq!(human.hp(), 120);
-		// Three sub-steps each add the fall speed and move a third of it.
-		assert!((human.move_y - -0.3_f32.min(0.0) + 3.0 * HUMAN_DAMAGE_SPEED).abs() < 1e-5);
+		// Three sub-steps each add the fall speed to the velocity.
+		assert!(
+			(human.move_y - (-0.3 - 3.0 * HUMAN_DAMAGE_SPEED)).abs() < 1e-5,
+			"{}",
+			human.move_y
+		);
 	}
 
 	#[test]
@@ -3023,11 +3062,12 @@ mod tests {
 		let mut weapons = Vec::new();
 
 		// The jump key is a flag the movement process consumes, so it has to be set before
-		// the frame runs and is read back as the previous frame's flag.
+		// the frame runs. This frame has it and the frame before it did not, which is what
+		// the previous-data form of the accessor reads.
 		human.jump();
 		assert_eq!(human.get_move_flag(true), move_flag::JUMP);
 		assert_eq!(human.get_jump_landing(true), 1, "jumping");
-		assert_eq!(human.get_jump_landing(false), 1);
+		assert_eq!(human.get_jump_landing(false), 0, "nothing was pressed last frame");
 
 		human.move_y = -4.0;
 		assert_eq!(human.process_object(&coll, &blocks, false, false, false, &mut weapons), 1);
@@ -3039,10 +3079,16 @@ mod tests {
 		assert_eq!(human.get_move_flag(true), 0, "the key flags are consumed");
 
 		// The next frame is airborne: the landing flag is cleared and the rise decays by
-		// the fall speed every sub-step.
+		// the fall speed every sub-step. The key is still held, which the manager feeds by
+		// setting the flag again every frame.
+		human.jump();
 		assert_eq!(human.process_object(&coll, &blocks, false, false, false, &mut weapons), 1);
 		assert!(!human.move_y_landing);
-		assert!((human.move_y - (HUMAN_JUMP_SPEED - 3.0 * HUMAN_DAMAGE_SPEED)).abs() < 1e-5);
+		assert!(
+			(human.move_y - (HUMAN_JUMP_SPEED - 3.0 * HUMAN_DAMAGE_SPEED)).abs() < 1e-5,
+			"{}",
+			human.move_y
+		);
 		assert_eq!(human.get_jump_landing(false), 1, "the previous frame's key is kept");
 		assert_eq!(human.get_jump_landing(true), 0);
 	}
@@ -3066,20 +3112,13 @@ mod tests {
 		assert_eq!(human.get_under_block(), (-1, -1));
 	}
 
-	#[test]
-	fn a_climb_disables_the_rise_for_eight_frames() {
-		let mut human = human();
-		human.move_y_upper = 8;
-		assert_eq!(human.move_y_upper, 8);
-	}
-
 	// -----------------------------------------------------------------------
 	// Movement flags and the direction they resolve to
 	// -----------------------------------------------------------------------
 
 	#[test]
 	fn the_five_movement_setters_and_the_jump_are_bits_of_one_word() {
-		let mut human = human();
+		let mut human = self::human();
 		human.set_move_forward();
 		assert_eq!(human.get_move_flag(true), 0x01);
 		human.set_move_back();
@@ -3139,7 +3178,7 @@ mod tests {
 		];
 
 		for (flags, angle, x, z) in cases {
-			let mut human = human();
+			let mut human = self::human();
 			human.move_flag = flags;
 			human.control_process();
 			assert_eq!(human.move_rx, angle, "flags {flags:#x}");
@@ -3170,7 +3209,7 @@ mod tests {
 		];
 
 		for (flags, mode) in cases {
-			let mut human = human();
+			let mut human = self::human();
 			human.move_flag = flags;
 			assert_eq!(human.get_movemode(true), mode, "flags {flags:#x}");
 			// The previous frame's mode is what the AI reads, and it is still empty.
@@ -3184,7 +3223,7 @@ mod tests {
 
 	#[test]
 	fn a_disabled_or_dead_human_has_no_movement_mode() {
-		let mut human = human();
+		let mut human = self::human();
 		human.set_move_forward();
 		assert_eq!(human.get_movemode(true), 2);
 		human.hp = 0;
@@ -3197,14 +3236,14 @@ mod tests {
 
 	#[test]
 	fn a_push_in_a_direction_adds_velocity_to_all_three_axes() {
-		let mut human = human();
+		let mut human = self::human();
 		human.add_pos_order(PI / 2.0, 0.0, 2.0);
 		let (x, y, z) = human.move_pos();
 		assert!(x.abs() < 1e-6, "a quarter turn is straight along Z: {x}");
 		assert_eq!(y, 0.0);
 		assert_eq!(z, 2.0);
 
-		let mut human = human();
+		let mut human = self::human();
 		human.add_pos_order(0.0, PI / 6.0, 3.0);
 		let (x, y, z) = human.move_pos();
 		assert!((x - 2.5980762).abs() < 1e-5, "{x}");
@@ -3262,7 +3301,7 @@ mod tests {
 
 	#[test]
 	fn picking_up_a_weapon_fills_the_selected_slot_and_starts_the_switch_count() {
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = vec![Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, 1, 30, true)];
 
 		// Slot B is the one a fresh human has selected, and the index is where the weapon
@@ -3280,7 +3319,7 @@ mod tests {
 		assert!(!second[0].using_flag());
 
 		// And a weapon another human is already holding cannot be taken.
-		let mut human = human();
+		let mut human = self::human();
 		let mut taken = vec![Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, 1, 30, true)];
 		assert_eq!(taken[0].pickup(), 0);
 		assert_eq!(human.pickup_weapon(0, &mut taken), 0);
@@ -3290,7 +3329,7 @@ mod tests {
 
 	#[test]
 	fn set_weapon_fills_both_slots_and_keeps_a_slot_whose_weapon_refuses_the_pickup() {
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = vec![
 			Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, 1, 30, true),
 			Weapon::new(ParameterInfo::new(), 0.0, 0.0, 0.0, 0.0, 4, 19, true),
@@ -3379,7 +3418,26 @@ mod tests {
 		assert_eq!(weapons[0].param_data(), (2, 4, 9));
 		assert_eq!(human.weaponshotcnt, 7, "the PSG1 fires every seven frames");
 		assert_eq!(human.weaponburstmodecnt, 1);
-		assert_eq!(human.reaction_gunsight_error_range, 15, "the PSG1's reaction");
+		assert_eq!(
+			human.reaction_gunsight_error_range, 0,
+			"the precision scope draws no reticle in the normal view, so no reaction is added"
+		);
+		// Its recoil is applied all the same, because it is not restricted to the scope
+		// view: up to half a degree sideways and 3.5 degrees up. The tenths are floats, so
+		// the bounds are checked with a little slack.
+		let slack = 1e-6;
+		assert!(
+			human.rotation_x >= degree_to_radian(-0.6) - slack
+				&& human.rotation_x <= degree_to_radian(0.5) + slack,
+			"{}",
+			human.rotation_x
+		);
+		let arm = human.armrotation_y;
+		assert!(
+			arm >= degree_to_radian(-30.0) + degree_to_radian(2.4) - slack
+				&& arm <= degree_to_radian(-30.0) + degree_to_radian(3.5) + slack,
+			"{arm}"
+		);
 
 		// A second pull in the same frame is refused, and it still leaves the frame marked
 		// as a firing frame, which is what holds the burst count together.
@@ -3395,16 +3453,17 @@ mod tests {
 		assert_eq!(human.weaponshotcnt, 0);
 		assert_eq!(human.weaponburstmodecnt, 0);
 
-		// And the next pull fires again.
-		assert_eq!(human.shot_weapon(&mut weapons), Some((2, 0)));
+		// And the next pull fires again. The seven frames went by in a world with no floor,
+		// so the human is airborne and the error the shot reports is the airborne state
+		// error of 22 plus a recoil that has decayed to nothing.
+		assert_eq!(human.shot_weapon(&mut weapons), Some((2, 22)));
 		assert_eq!(human.weaponburstmodecnt, 1);
 		assert_eq!(weapons[0].param_data(), (2, 3, 8));
 
 		// The full auto setting is the one that is not single shot.
 		assert!(!human.get_weapon_blazingmode(&weapons), "the PSG1 is single shot");
 		let (mp5, mp5weapons) = armed(1, 5, 30);
-		assert!(mp5.get_weapon_blazingmode(&mp5weapons));
-		assert!(!mp5.weapon[0].is_some() && mp5.no_weapon_blazingmode_placeholder());
+		assert!(mp5.get_weapon_blazingmode(&mp5weapons), "the MP5 is full auto");
 	}
 
 	#[test]
@@ -3440,15 +3499,17 @@ mod tests {
 		// A second reload is refused while the first is running.
 		assert!(!human.reload_weapon(&mut weapons));
 
-		// The count is the set of frames the reload takes.
+		// The count is the set of frames the reload takes. F5 mode holds the human up: a
+		// world with no floor would drop it past the deadline inside sixty frames, and a
+		// death clears every one of these counts.
 		for _ in 0..58 {
-			human.process_object(&coll, &bd, false, false, false, &mut weapons);
+			human.process_object(&coll, &bd, false, false, true, &mut weapons);
 		}
 		assert_eq!(human.get_weapon_reload_cnt(), 1);
 		assert_eq!(weapons[0].param_data(), (2, 4, 9));
 
 		// The last frame refills from the reserve: five into a five round magazine.
-		human.process_object(&coll, &bd, false, false, false, &mut weapons);
+		human.process_object(&coll, &bd, false, false, true, &mut weapons);
 		assert_eq!(human.get_weapon_reload_cnt(), 0);
 		assert_eq!(weapons[0].param_data(), (2, 5, 5));
 
@@ -3459,7 +3520,7 @@ mod tests {
 	#[test]
 	fn an_empty_hand_cannot_fire_reload_or_look_through_a_scope() {
 		let (coll, bd) = empty_world();
-		let mut human = human();
+		let mut human = self::human();
 		let mut weapons = Vec::new();
 
 		assert_eq!(human.shot_weapon(&mut weapons), None);
@@ -3542,9 +3603,12 @@ mod tests {
 		assert_eq!(human.get_weapon().1, [None, None]);
 		assert!(!weapons[0].using_flag());
 		assert_eq!(human.get_scope_mode(), 0);
-		// The weapon lands five units along the looking direction and sixteen up.
-		assert!((weapons[0].object.pos_x - 5.0).abs() < 1e-5);
-		assert!((weapons[0].object.pos_y - 19.0).abs() < 1e-5);
+		// The weapon lands five units along the looking direction and sixteen up. The
+		// looking direction at a rotation of zero is straight along Z, because the world's
+		// X axis is the one the renderer mirrors.
+		assert!(weapons[0].object.pos_x.abs() < 1e-5, "{}", weapons[0].object.pos_x);
+		assert_eq!(weapons[0].object.pos_y, 19.0);
+		assert!((weapons[0].object.pos_z - 5.0).abs() < 1e-5);
 
 		// There is nothing left to drop.
 		assert!(!human.dump_weapon(&mut weapons));
@@ -3601,10 +3665,21 @@ mod tests {
 		d3dg.set_camera(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 		let resource = ResourceManager::new();
 
-		let mut human = human();
+		let mut human = self::human();
 		human.set_model(101, [102, 103, 104], 105, [106; TOTAL_WALKMODE], [107; TOTAL_RUNMODE]);
 		human.set_pos_data(1.0, 2.0, 3.0, 0.0);
 		human.set_rx_ry(0.25, 0.5);
+
+		// The motion only picks a model and an arm angle when it is run, which is once per
+		// frame, so one frame of it is run first: `render` reads what it left behind.
+		human.motion_ctrl
+			.process_object(0.25, 0.5, ID_WEAPON_NONE, 0, 0, 0, 120, true);
+		let (armry, legrx, upmodel, armmodel, legmodel) = human.motion_ctrl.get_render_motion();
+		assert_eq!(upmodel, 101);
+		assert_eq!(armmodel, 102, "the empty hand's arm model");
+		assert_eq!(legmodel, 105, "the idle leg model");
+		assert_eq!(armry, ARMRAD_NOWEAPON, "an empty player hand rests the arm");
+		assert!((legrx - 0.0375).abs() < 1e-6, "the legs chase the body angle: {legrx}");
 
 		// Drawing everything ends on the arms, which is the transform left behind. The
 		// arms are sixteen units above the feet.
@@ -3612,10 +3687,6 @@ mod tests {
 		let arms = d3dg.modelview();
 		let origin = arms.transform_point(Vec3::ZERO);
 		assert!((origin.y - 18.0).abs() < 1e-4, "{origin:?}");
-
-		// The arm model and the arm angle are the ones the motion control hands out.
-		let (_, _, _, armmodel, _) = human.motion_ctrl.get_render_motion();
-		assert_eq!(armmodel, 104);
 
 		// Drawing only the arms lands in the same place, because that is the last thing
 		// the full draw does too.
@@ -3632,22 +3703,48 @@ mod tests {
 		human.rotation_y = angle;
 		human.render(&mut fallen, &resource, false, false, false, &[]);
 		let origin = fallen.modelview().transform_point(Vec3::ZERO);
-		assert!((origin.y - (2.0 + angle.cos() * 16.0)).abs() < 1e-4, "{origin:?}");
+		let expected = 2.0 + angle.cos() * 16.0;
+		assert!((origin.y - expected).abs() < 1e-4, "{origin:?}");
 
-		// A human with no weapon and a human holding one both draw the arms at the hand
-		// height, but the held weapon adds its own placement on top.
+		// A human holding a weapon draws the arms and then the weapon in them, both at the
+		// hand height. The same human with an empty hand ends on the arms, so the two
+		// transforms differ by the weapon's own placement and nothing else.
 		let (mut armed_human, weapons) = armed(1, 5, 30);
 		armed_human.set_model(101, [102, 103, 104], 105, [106; TOTAL_WALKMODE], [107; TOTAL_RUNMODE]);
 		armed_human.set_pos_data(1.0, 2.0, 3.0, 0.0);
 		armed_human.set_rx_ry(0.25, 0.5);
-		armed_human.usage_note_for_the_test();
+		armed_human
+			.motion_ctrl
+			.process_object(0.25, 0.5, 1, 0, 0, 0, 120, true);
+
 		let mut holding = headless();
 		holding.set_camera(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 		armed_human.render(&mut holding, &resource, false, false, false, &weapons);
+
+		// The weapon is drawn at its own draw size rather than the arm's, and the transform
+		// is the hand position plus the gun's own offset from it, which is why the origin
+		// moved off the hand height.
+		let first_column = |m: &[f32; 16]| (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt();
+		assert!(
+			(first_column(&holding.modelview().m) - 7.5).abs() < 1e-3,
+			"the MP5's draw size: {}",
+			first_column(&holding.modelview().m)
+		);
+
+		let slot = armed_human.selectweapon as usize;
+		armed_human.weapon[slot] = None;
+		let mut empty = headless();
+		empty.set_camera(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+		armed_human.render(&mut empty, &resource, false, false, false, &weapons);
 		assert_ne!(
 			holding.modelview().m,
-			arms.m,
-			"the weapon offset is applied on top of the arms"
+			empty.modelview().m,
+			"the held weapon is placed in the hands"
+		);
+		assert!(
+			(first_column(&empty.modelview().m) - 9.0).abs() < 1e-3,
+			"the arm's draw size: {}",
+			first_column(&empty.modelview().m)
 		);
 
 		// A disabled human draws nothing and leaves the transform where it was.
