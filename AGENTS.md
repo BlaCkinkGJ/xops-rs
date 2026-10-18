@@ -46,7 +46,14 @@ the two disagree.
 ## Working
 
 - `cargo test --workspace` is the suite, and it is fast. `cargo check --workspace
-  --all-targets` must stay warning-free, on every target.
+  --all-targets` must stay warning-free, on every target. `cargo fmt --all --check`
+  and `cargo clippy --workspace --all-targets --all-features -- -D warnings` are the
+  other two gates, and CI runs all four on every push.
+- **A test must pass on a checkout with no `data/`.** The game's data is not in this
+  repository and must not be, so CI has none, and a test that reads it fails there
+  for a reason that is not a mistake in the code. Eight did, all in `map.rs`, and they
+  skip now -- `cargo test -- --nocapture` names them. A test that needs data is a test
+  that needs a fixture of this port's own making; see issue #2.
 - **Most of the suite needs a GPU adapter**, because the renderer is what it is
   testing. A bare container has none, and there it looks like fifty-three
   failures rather than one cause: `Gfx::new` returns an error and every test that

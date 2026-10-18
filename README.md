@@ -213,7 +213,14 @@ view angle, and where the HUD weapon was placed.
 
 ## Verified
 
-Run, not read:
+CI runs four things on every push, on Linux: `cargo fmt --all --check`, `cargo clippy
+--workspace --all-targets --all-features -- -D warnings`, `cargo check --workspace
+--all-targets` and `cargo test --workspace`, with the tests under instrumentation for
+coverage afterwards. macOS and Windows type-check, which is as much as a hosted runner
+without a GPU can do. The tests that read the original game's data skip themselves
+where it is absent, which is what a runner is; `cargo test -- --nocapture` names them.
+
+And here, by hand, run rather than read:
 
 - The opening sequence, the menu with its demo, and a mission on the official
   TRAINING YARD map: the map, the player, other humans, the HUD panels, the
