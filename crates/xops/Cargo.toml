@@ -1,0 +1,10 @@
+[package]
+name = "xops"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "OpenXOPS as a standalone cross-platform game."
+
+[dependencies]
+xops-platform.workspace = true
+wgpu.workspace = true

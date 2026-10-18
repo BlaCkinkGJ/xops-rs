@@ -7,6 +7,7 @@ web/openxops.data
 web/openxops.worker.js
 build/
 *.log
+/target/
 renderer/target/
 __pycache__/
 *.pyc
