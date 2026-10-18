@@ -351,7 +351,7 @@ impl SoundManager {
 
 	/// `SoundManager::GetTotalSoundList`: how many sources the list being processed holds.
 	pub fn get_total_sound_list(&self) -> i32 {
-		if self.change_ab == false {
+		if !self.change_ab {
 			self.list_b_datas
 		} else {
 			self.list_a_datas
@@ -386,7 +386,7 @@ impl SoundManager {
 					// would leave `WParam` as the stack held it.
 					let silencer = param
 						.get_weapon(getlist[i].dataid)
-						.map_or(false, |weapon| weapon.silencer);
+						.is_some_and(|weapon| weapon.silencer);
 
 					if getlist[i].teamid == team_id {
 						maxdist = 20.0;
@@ -504,7 +504,7 @@ impl SoundManager {
 	) {
 		// Swap the lists. The one being replaced is the one the frame after this will
 		// queue into, so it is cleared before it can be read again.
-		if self.change_ab == false {
+		if !self.change_ab {
 			self.list_b_datas = 0;
 			self.change_ab = true;
 		} else {
@@ -536,7 +536,7 @@ impl SoundManager {
 
 	/// `SoundManager::GetNewList`: the next free entry of the list being queued into.
 	fn get_new_list(&mut self) -> Option<&mut Soundlist> {
-		if self.change_ab == false {
+		if !self.change_ab {
 			if self.list_a_datas + 1 >= MAX_SOUNDMGR_LIST as i32 {
 				return None;
 			}
@@ -555,7 +555,7 @@ impl SoundManager {
 
 	/// `SoundManager::GetTargetList`: the list to process this frame.
 	fn get_target_list(&self) -> &[Soundlist] {
-		if self.change_ab == false {
+		if !self.change_ab {
 			&self.sound_list_b[..self.list_b_datas as usize]
 		} else {
 			&self.sound_list_a[..self.list_a_datas as usize]

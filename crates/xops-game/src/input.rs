@@ -202,7 +202,7 @@ impl InputControl {
 
 	/// `CheckKeyNow`: whether the key is down now.
 	pub fn check_key_now(&self, id: i32) -> bool {
-		if id < 0 || 256 <= id {
+		if !(0..256).contains(&id) {
 			return false;
 		}
 
@@ -211,7 +211,7 @@ impl InputControl {
 
 	/// `CheckKeyDown`: whether the key went down this frame.
 	pub fn check_key_down(&self, id: i32) -> bool {
-		if id < 0 || 256 <= id {
+		if !(0..256).contains(&id) {
 			return false;
 		}
 
@@ -220,7 +220,7 @@ impl InputControl {
 
 	/// `CheckKeyUp`: whether the key came up this frame.
 	pub fn check_key_up(&self, id: i32) -> bool {
-		if id < 0 || 256 <= id {
+		if !(0..256).contains(&id) {
 			return false;
 		}
 

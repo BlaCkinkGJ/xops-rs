@@ -693,7 +693,7 @@ pub const HUMAN_PARAMETER: [HumanParameter; TOTAL_PARAMETERINFO_HUMAN] = [
 ];
 
 /// Upstream `HumanTexturePath`. 30 entries.
-pub const HUMAN_TEXTURE_PATH: [&'static [u8]; TOTAL_HUMANTEXTURE] = [
+pub const HUMAN_TEXTURE_PATH: [&[u8]; TOTAL_HUMANTEXTURE] = [
 	b"./data/model/civ1.bmp",
 	b"./data/model/civ2.bmp",
 	b"./data/model/civ3.bmp",
@@ -2519,14 +2519,14 @@ mod tests {
 		assert_eq!(training.txt, b"tr".as_slice());
 		assert!(!training.collision);
 		assert!(!training.screen);
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[33].screen, true);
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[43].screen, true);
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[55].collision, true);
+		assert!(OFFICIAL_MISSION_PARAMETER[33].screen);
+		assert!(OFFICIAL_MISSION_PARAMETER[43].screen);
+		assert!(OFFICIAL_MISSION_PARAMETER[55].collision);
 		assert_eq!(OFFICIAL_MISSION_PARAMETER[55].name, b"SCHOOL_EXT".as_slice());
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[56].collision, true);
+		assert!(OFFICIAL_MISSION_PARAMETER[56].collision);
 		assert_eq!(OFFICIAL_MISSION_PARAMETER[57].name, b"SCHOOL_DE".as_slice());
 		assert_eq!(OFFICIAL_MISSION_PARAMETER[57].txt, b"de".as_slice());
-		assert_eq!(OFFICIAL_MISSION_PARAMETER[57].collision, true);
+		assert!(OFFICIAL_MISSION_PARAMETER[57].collision);
 
 		// AI levels: attack falls as the level rises, level 0 is the odd one at 99
 		assert_eq!(

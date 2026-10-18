@@ -1005,7 +1005,7 @@ impl<'a> MainGame<'a> {
 						self.world.objects.hit_zombie_attack(
 							player_id as usize,
 							i,
-							&self.world.resource,
+							self.world.resource,
 							sound,
 							config,
 						);
@@ -1033,7 +1033,7 @@ impl<'a> MainGame<'a> {
 			if self.check_input_control(input_ctrl, config, ControlKey::KEY_SHOTMODE, 1) {
 				self.world
 					.objects
-					.change_weapon_id(player_id, d3dg, &self.world.resource);
+					.change_weapon_id(player_id, d3dg, self.world.resource);
 			}
 
 			// Discarding the weapon.
@@ -1093,7 +1093,7 @@ impl<'a> MainGame<'a> {
 			{
 				self.world
 					.objects
-					.cheat_add_bullet(player_id, d3dg, &self.world.resource);
+					.cheat_add_bullet(player_id, d3dg, self.world.resource);
 			}
 
 			// Change weapon: F7 with left or right held.
@@ -1107,7 +1107,7 @@ impl<'a> MainGame<'a> {
 					}
 					self.world
 						.objects
-						.cheat_new_weapon(player_id, id_param, d3dg, &self.world.resource);
+						.cheat_new_weapon(player_id, id_param, d3dg, self.world.resource);
 				}
 				if input_ctrl.check_key_down(originalkeycode_to_dinputdef(0x03)) {
 					let mut id_param = self.weapon_type_no();
@@ -1118,7 +1118,7 @@ impl<'a> MainGame<'a> {
 					}
 					self.world
 						.objects
-						.cheat_new_weapon(player_id, id_param, d3dg, &self.world.resource);
+						.cheat_new_weapon(player_id, id_param, d3dg, self.world.resource);
 				}
 			}
 		}
@@ -1208,7 +1208,7 @@ impl<'a> MainGame<'a> {
 			0,
 			false,
 			d3dg,
-			&self.world.resource,
+			self.world.resource,
 		);
 		if id >= 0 {
 			self.world.objects.change_have_weapon(id, selectweapon);
@@ -1347,7 +1347,7 @@ impl<'a> MainGame<'a> {
 				false,
 				dark,
 				d3dg,
-				&**resource,
+				resource,
 				collision,
 				block_data,
 				mif.as_ref(),
@@ -1395,7 +1395,7 @@ impl<'a> MainGame<'a> {
 					collision,
 					sound,
 					d3dg,
-					&**resource,
+					resource,
 					config,
 				);
 			}
@@ -1606,7 +1606,7 @@ impl<'a> MainGame<'a> {
 
 		sound.play_world_sound(
 			sound_ctrl,
-			&self.world.resource,
+			self.world.resource,
 			&self.world.param,
 			self.base.camera_x,
 			self.base.camera_y,
@@ -1686,7 +1686,7 @@ impl<'a> MainGame<'a> {
 		let nomodel = self.nomodel;
 		self.world.objects.render(
 			d3dg,
-			&self.world.resource,
+			self.world.resource,
 			cx,
 			cy,
 			cz,
@@ -2185,7 +2185,7 @@ impl<'a> MainGame<'a> {
 			}
 
 			d3dg.draw_2d_ms_font_text_center_scaling(
-				0 + 1,
+				1,
 				340 + 1,
 				width,
 				140,
@@ -3732,7 +3732,7 @@ impl<'a> MainGame<'a> {
 					&self.world.collision,
 					&self.world.block_data,
 					self.world.mif.as_ref(),
-					&self.world.resource,
+					self.world.resource,
 				);
 				if dataid != -1 {
 					let line = format!("Add SmallObject[{dataid}].");

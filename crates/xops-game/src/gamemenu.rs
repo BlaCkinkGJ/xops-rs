@@ -834,7 +834,7 @@ impl<'a> Opening<'a> {
 		self.base.sound(
 			game_sound,
 			sound_ctrl,
-			&self.world.resource,
+			self.world.resource,
 			&self.world.param,
 		);
 	}
@@ -2318,7 +2318,7 @@ impl<'a> MainMenu<'a> {
 		self.base.sound(
 			game_sound,
 			sound_ctrl,
-			&self.world.resource,
+			self.world.resource,
 			&self.world.param,
 		);
 	}

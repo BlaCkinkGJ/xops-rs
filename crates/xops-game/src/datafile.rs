@@ -337,7 +337,7 @@ fn atof(bytes: &[u8]) -> f64 {
 		return 0.0;
 	}
 	let mut end = i;
-	if i < s.len() && s[i].to_ascii_lowercase() == b'e' {
+	if i < s.len() && s[i].eq_ignore_ascii_case(&b'e') {
 		let mut j = i + 1;
 		if j < s.len() && (s[j] == b'+' || s[j] == b'-') {
 			j += 1;

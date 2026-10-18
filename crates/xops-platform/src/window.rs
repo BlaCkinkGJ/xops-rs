@@ -344,7 +344,7 @@ fn fit_to_display(
 		return (width, height);
 	};
 	let size = monitor.size();
-	let scale = monitor.scale_factor() as f64;
+	let scale = monitor.scale_factor();
 	let (available_width, available_height) = (
 		(size.width as f64 / scale) * 0.9,
 		(size.height as f64 / scale) * 0.9,

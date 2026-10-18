@@ -593,7 +593,7 @@ mod tests {
         };
         for r in order {
             f.extend(&rows[r]);
-            f.extend(std::iter::repeat(0u8).take(pad));
+            f.extend(std::iter::repeat_n(0u8, pad));
         }
         f
     }
@@ -620,7 +620,7 @@ mod tests {
             for px in &rows[r] {
                 f.extend([px[2], px[1], px[0]]);
             }
-            f.extend(std::iter::repeat(0u8).take(pad));
+            f.extend(std::iter::repeat_n(0u8, pad));
         }
         f
     }

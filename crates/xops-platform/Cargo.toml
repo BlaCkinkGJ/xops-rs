@@ -16,3 +16,5 @@ fontdue = "0.9.4"
 encoding_rs = "0.8.35"
 cpal = "0.17.3"
 
+[lints]
+workspace = true

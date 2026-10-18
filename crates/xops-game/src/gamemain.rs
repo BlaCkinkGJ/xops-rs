@@ -216,7 +216,7 @@ pub fn init_game<'a>(
 	// draws nothing at all: the shots are fired, they hit, and nothing is ever seen of them
 	// on the way. The objects' own `recovery` does it too, but that runs when a screen is
 	// recovered after the renderer is reset, which a mission played from the start never is.
-	world.objects.set_class(&world.resource);
+	world.objects.set_class(world.resource);
 
 	match (mode, mif_path) {
 		// A mission was named on the command line, so the addon list is not needed: nothing
@@ -362,6 +362,7 @@ impl Default for GameInfo {
 
 /// `MenuLinkTextData`: one selectable line on an options page.
 #[derive(Copy, Clone, Debug)]
+#[derive(Default)]
 pub struct MenuLinkTextData {
 	pub enable: bool,
 	pub pos_x: i32,
@@ -373,20 +374,6 @@ pub struct MenuLinkTextData {
 	pub text: [u8; 32],
 }
 
-impl Default for MenuLinkTextData {
-	fn default() -> Self {
-		MenuLinkTextData {
-			enable: false,
-			pos_x: 0,
-			pos_y: 0,
-			text_w: 0,
-			text_h: 0,
-			text_defaultcolor: 0,
-			text_cursorcolor: 0,
-			text: [0; 32],
-		}
-	}
-}
 
 /// `ConsoleData`: one line of the debug console.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

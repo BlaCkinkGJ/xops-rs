@@ -10,3 +10,5 @@ xops-game.workspace = true
 xops-platform.workspace = true
 wgpu.workspace = true
 
+[lints]
+workspace = true

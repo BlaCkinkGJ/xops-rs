@@ -1313,7 +1313,7 @@ impl AIcontrol {
 		};
 		let dead = obj_mgr
 			.get_human_object(enemy_id)
-			.map_or(true, |human| human.dead_flag());
+			.is_none_or(|human| human.dead_flag());
 		if dead {
 			return true;
 		}
@@ -2365,7 +2365,7 @@ impl AIcontrol {
 	/// repeats in `MoveTarget` and `Action`.
 	fn is_zombie(&self, obj_mgr: &ObjectManager, human_id: i32) -> bool {
 		self.human_param(obj_mgr, human_id)
-			.map_or(false, |param| param.r#type == 2)
+			.is_some_and(|param| param.r#type == 2)
 	}
 
 	/// `human::GetMainWeaponTypeNO`.
@@ -2405,7 +2405,7 @@ impl AIcontrol {
 
 		self.param
 			.get_weapon(weaponid)
-			.map_or(false, |data| data.burstcnt != 1)
+			.is_some_and(|data| data.burstcnt != 1)
 	}
 }
 

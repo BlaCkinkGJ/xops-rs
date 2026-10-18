@@ -358,7 +358,7 @@ impl Collision {
 		}
 		// Upstream's guard lets face 6 through and then reads past both the face centers
 		// and the material, so the length of the face table is the limit here instead.
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return false;
 		}
 
@@ -392,7 +392,7 @@ impl Collision {
 		if (id < 0) || (block_data_if.get_total_datas() <= id) {
 			return false;
 		}
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return false;
 		}
 
@@ -674,14 +674,10 @@ impl Collision {
 		}
 
 		// Check between the bounding box and the ray.
-		if collide_aabb_ray(
+		collide_aabb_ray(
 			block.min_x, block.min_y, block.min_z, block.max_x, block.max_y, block.max_z,
 			ray_pos_x, ray_pos_y, ray_pos_z, ray_dir_x, ray_dir_y, ray_dir_z, -1.0,
-		)
-		.is_none()
-		{
-			return None;
-		}
+		)?;
 
 		// Check for each polygon.
 		for i in 0..6 {
@@ -942,7 +938,7 @@ impl Collision {
 		if (id < 0) || (block_data_if.get_total_datas() <= id) {
 			return None;
 		}
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return None;
 		}
 
@@ -975,7 +971,7 @@ impl Collision {
 		if (id < 0) || (block_data_if.get_total_datas() <= id) {
 			return None;
 		}
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return None;
 		}
 
@@ -1011,7 +1007,7 @@ impl Collision {
 		if (id < 0) || (block_data_if.get_total_datas() <= id) {
 			return None;
 		}
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return None;
 		}
 		if (in_vx == 0.0) && (in_vy == 0.0) && (in_vz == 0.0) {
@@ -1049,7 +1045,7 @@ impl Collision {
 		if (id < 0) || (block_data_if.get_total_datas() <= id) {
 			return None;
 		}
-		if (face < 0) || (6 <= face) {
+		if !(0..6).contains(&face) {
 			return None;
 		}
 		if (in_vx == 0.0) && (in_vy == 0.0) && (in_vz == 0.0) {

@@ -22,6 +22,51 @@ pollster = "0.4"
 wgpu = "24"
 winit = "0.30"
 
+[workspace.lints.clippy]
+# Four lints that this port trips on purpose, because it follows upstream's code
+# rather than idiomatic Rust. Allowing them is the honest fix: the alternative is
+# rewriting the translation, which is the one thing the port must not do.
+#
+#   too_many_arguments -- the signatures are upstream's. Collapsing their arguments
+#     changes how the game's own functions are called and what a diff against the
+#     original means.
+#   neg_multiply -- `* -1.0` is how upstream spells a negation, and where it appears
+#     here it is that expression, kept.
+#   collapsible_if -- nested `if`s are upstream's control flow. Collapsing them is a
+#     rewrite rather than a translation.
+#   tabs_in_doc_comments -- the codebase is tab-indented, doc comments included.
+#
+#   needless_range_loop -- `for i in 0..n { a[i] }` is upstream's loop. The iterator
+#     form is idiomatic Rust and a different thing to read against the original.
+#   if_same_then_else -- upstream writes chains like `if walk { 0 } else if forward
+#     { 0 }`, where two arms agree on purpose. Flattening them loses the cases.
+#   assertions_on_constants -- the tests assert the invariants the ported constants
+#     are supposed to hold, which the compiler folds away. They are documentation,
+#     and they fail the moment a constant is changed.
+#   manual_clamp -- `min`/`max` and `clamp` differ on NaN and on the order in which
+#     the comparisons happen, and this port keeps the comparisons upstream makes.
+#   neg_cmp_op_on_partial_ord -- `!(a < b)` on floats is upstream's expression.
+#   manual_memcpy -- copying loops are upstream's, and they are what is compared
+#     against the original.
+#   type_complexity -- the types are upstream's arrays and tuples, spelled out.
+#   large_enum_variant -- the variants mirror upstream's object kinds.
+#   new_without_default -- the constructors are upstream's initialisers, which do
+#     not all mean "the default value of this type".
+too_many_arguments = "allow"
+neg_multiply = "allow"
+collapsible_if = "allow"
+tabs_in_doc_comments = "allow"
+needless_range_loop = "allow"
+manual_find = "allow"
+if_same_then_else = "allow"
+assertions_on_constants = "allow"
+manual_clamp = "allow"
+neg_cmp_op_on_partial_ord = "allow"
+manual_memcpy = "allow"
+type_complexity = "allow"
+large_enum_variant = "allow"
+new_without_default = "allow"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

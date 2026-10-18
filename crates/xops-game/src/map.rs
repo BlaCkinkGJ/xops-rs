@@ -90,7 +90,7 @@ impl D3DGraphics {
 	/// [`xops_platform::texture::check_texture_file_type_flag`], which the load below
 	/// calls. They live in the platform crate because they are the front half of the four
 	/// decoders there, which are the same four the upstream dispatches to.
-
+	///
 	/// The renderer's slot for a game texture id.
 	///
 	/// The game says "no texture" with -1, and it also names textures that failed to

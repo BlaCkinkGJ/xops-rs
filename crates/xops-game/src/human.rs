@@ -646,9 +646,7 @@ impl Human {
 		}
 
 		// Fail if no weapon is equipped.
-		let Some(index) = self.weapon[slot] else {
-			return None;
-		};
+		let index = self.weapon[slot]?;
 
 		// Accept the firing request and enable the flag. It stays set even when the shot
 		// fails below, which is what keeps the burst mode count alive between frames.
@@ -664,12 +662,8 @@ impl Human {
 
 		// Get the weapon type number and its setting values.
 		let param_id = weapons[index].param_data().0;
-		let Some(param_data) = self.object.param.get_weapon(param_id) else {
-			return None;
-		};
-		let Some(sparam) = self.object.param.get_scope_param(param_data.scopemode) else {
-			return None;
-		};
+		let param_data = self.object.param.get_weapon(param_id)?;
+		let sparam = self.object.param.get_scope_param(param_data.scopemode)?;
 
 		// Fail if burst mode is enabled and the burst bullet count is exceeded.
 		if (param_data.burstcnt > 0) && (self.weaponburstmodecnt >= param_data.burstcnt) {
@@ -1917,7 +1911,7 @@ impl Human {
 			// Standing still, a human only stays put three times out of four: the fourth
 			// lets the slope slide be applied.
 			let mut flag = true;
-			if get_flag(self.move_flag_lt, move_flag::FORWARD | move_flag::BACK | move_flag::LEFT | move_flag::RIGHT | move_flag::WALK) == false {
+			if !get_flag(self.move_flag_lt, move_flag::FORWARD | move_flag::BACK | move_flag::LEFT | move_flag::RIGHT | move_flag::WALK) {
 				if get_rand(4) == 0 {
 					if self.move_y_upper == 0 {
 						flag = false;
@@ -3245,7 +3239,7 @@ mod tests {
 		let mut human = self::human();
 		human.add_pos_order(0.0, PI / 6.0, 3.0);
 		let (x, y, z) = human.move_pos();
-		assert!((x - 2.5980762).abs() < 1e-5, "{x}");
+		assert!((x - 2.598_076).abs() < 1e-5, "{x}");
 		assert!((y - 1.5).abs() < 1e-5, "{y}");
 		assert!(z.abs() < 1e-6, "{z}");
 	}

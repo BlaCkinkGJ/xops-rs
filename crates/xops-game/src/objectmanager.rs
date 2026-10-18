@@ -1548,7 +1548,7 @@ impl ObjectManager {
 		let not_robot = self
 			.param
 			.get_human(param_id)
-			.map_or(true, |param| param.r#type != 1);
+			.is_none_or(|param| param.r#type != 1);
 
 		let damage = match hit_id {
 			0 => (attacks as f32 * HUMAN_DAMAGE_HEAD) as i32,
@@ -2059,7 +2059,7 @@ impl ObjectManager {
 		if self
 			.param
 			.get_human(in_human.get_param_data().0)
-			.map_or(false, |param| param.r#type == 2)
+			.is_some_and(|param| param.r#type == 2)
 		{
 			return;
 		}
@@ -3155,7 +3155,7 @@ impl ObjectManager {
 		let not_robot = self
 			.param
 			.get_human(param_id)
-			.map_or(true, |param| param.r#type != 1);
+			.is_none_or(|param| param.r#type != 1);
 
 		let hp_old = self.human_index[enemy_human_id].hp();
 		self.human_index[enemy_human_id].hit_zombie_attack();

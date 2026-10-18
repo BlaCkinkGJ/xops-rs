@@ -544,8 +544,10 @@ mod tests {
 		let mut mif = MIFInterface::new();
 		assert_eq!(mif.load_file_data(&path, true), 0);
 		assert!(!mif.get_filetype());
-		let mut info = GameInfo::default();
-		info.selectmission_id = 0;
+		let info = GameInfo {
+			selectmission_id: 0,
+			..GameInfo::default()
+		};
 		assert_eq!(
 			mission_name(&mif, &ParameterInfo::new(), &info),
 			b"TRAINING YARD training"

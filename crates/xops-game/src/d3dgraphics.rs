@@ -693,9 +693,9 @@ mod tests {
 		// tolerance is a hundredth rather than a millionth: the reference's inputs are only
 		// known to two decimal places, so the comparison is as precise as they are.
 		const REFERENCE: [f32; 16] = [
-			0.379_133_28, 0.462_671_49, -0.801_369_49, 0.0, //
-			0.0, 0.866_025_15, 0.500_000_48, 0.0, //
-			0.925_342_08, -0.189_566_82, 0.328_338_95, 0.0, //
+			0.379_133_28, 0.462_671_5, -0.801_369_5, 0.0, //
+			0.0, 0.866_025_15, 0.500_000_5, 0.0, //
+			0.925_342_1, -0.189_566_82, 0.328_338_95, 0.0, //
 			207.396_21, -2.707_754, -53.209_976, 1.0, //
 		];
 
