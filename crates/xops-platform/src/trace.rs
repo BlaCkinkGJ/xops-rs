@@ -69,6 +69,8 @@ struct Counters {
 	warps_skipped: u64,
 	presented: u64,
 	presented_unblended: u64,
+	unmatched_draws: u64,
+	shear_worst: f64,
 	present_gaps: u64,
 	present_gap_mean_ms: f64,
 	present_gap_min_ms: f64,
@@ -115,6 +117,10 @@ static PRESENT_T_SUM: AtomicU64 = AtomicU64::new(0);
 static PRESENT_T_MAX: AtomicU64 = AtomicU64::new(0);
 static PRESENT_T_DUPLICATES: AtomicU64 = AtomicU64::new(0);
 static LAST_T: AtomicU64 = AtomicU64::new(0);
+/// Draws that could not be matched to the same draw a frame before, and how far from rigid
+/// the worst blend of the second was.
+static UNMATCHED_DRAWS: AtomicU64 = AtomicU64::new(0);
+static SHEAR_WORST: AtomicU64 = AtomicU64::new(0);
 static WARPS_SKIPPED: AtomicU64 = AtomicU64::new(0);
 /// The screen's name, which changes rarely and is only read once a second.
 static SCREEN: Mutex<&'static str> = Mutex::new("none");
@@ -185,6 +191,20 @@ pub fn movement_taken(dx: i32, dy: i32) {
 pub fn presented() {
 	if enabled() {
 		PRESENTED.fetch_add(1, Ordering::Relaxed);
+	}
+}
+
+/// Draws that had no counterpart in the frame before, so were not blended.
+pub fn unmatched_draws(count: u64) {
+	if enabled() {
+		UNMATCHED_DRAWS.fetch_add(count, Ordering::Relaxed);
+	}
+}
+
+/// How far from rigid the worst blend of a frame was.
+pub fn blend_shear(fraction: f64) {
+	if enabled() {
+		store(&SHEAR_WORST, load(&SHEAR_WORST).max(fraction));
 	}
 }
 
@@ -309,6 +329,8 @@ fn take() -> Counters {
 		warps_skipped: WARPS_SKIPPED.swap(0, Ordering::Relaxed),
 		presented: PRESENTED.swap(0, Ordering::Relaxed),
 		presented_unblended: PRESENTED_UNBLENDED.swap(0, Ordering::Relaxed),
+		unmatched_draws: UNMATCHED_DRAWS.swap(0, Ordering::Relaxed),
+		shear_worst: load(&SHEAR_WORST),
 		present_gaps: PRESENT_GAPS.swap(0, Ordering::Relaxed),
 		present_gap_mean_ms: load(&PRESENT_GAP_MS),
 		present_gap_min_ms: load(&PRESENT_GAP_MIN_MS),
@@ -343,6 +365,7 @@ fn take() -> Counters {
 		&PRESENT_GAP_MIN_MS,
 		&PRESENT_T_SUM,
 		&PRESENT_T_MAX,
+		&SHEAR_WORST,
 	] {
 		store(cell, 0.0);
 	}
@@ -430,6 +453,13 @@ pub fn report() {
 		counters.aim_y,
 		counters.screen,
 	);
+	if counters.unmatched_draws > 0 || counters.shear_worst > 0.01 {
+		eprintln!(
+			"xops:   draws: {} unmatched, worst blend {}% away from rigid",
+			counters.unmatched_draws,
+			counters.shear_worst * 100.0
+		);
+	}
 	if counters.present_gaps > 0 {
 		eprintln!(
 			"xops:   present gaps: mean {:.2}ms min {:.2} max {:.2} over {}, {} under 5ms | t mean {:.2} max {:.2}, {} repeats",

@@ -77,20 +77,45 @@ enum Cmd {
 /// At `t` of zero this is the previous frame and at one it is this one, with the two
 /// matrices each draw carries blended straight through: the world is drawn through them, so
 /// bending them is what places the whole scene partway through the step it is moving.
+#[cfg(test)]
 fn blend_uniforms(before: &[Uniforms], now: &[Uniforms], t: f32) -> Vec<Uniforms> {
 	now.iter()
 		.zip(before.iter())
-		.map(|(now, before)| {
-			let mut blend = *now;
-			for i in 0..16 {
-				blend.transform[i] =
-					before.transform[i] + (now.transform[i] - before.transform[i]) * t;
-				blend.modelview[i] =
-					before.modelview[i] + (now.modelview[i] - before.modelview[i]) * t;
-			}
-			blend
-		})
+		.map(|(now, before)| blend_one(before, now, t))
 		.collect()
+}
+
+/// One draw, blended between the frame before and the frame now.
+fn blend_one(before: &Uniforms, now: &Uniforms, t: f32) -> Uniforms {
+	let mut blend = *now;
+	for i in 0..16 {
+		blend.transform[i] = before.transform[i] + (now.transform[i] - before.transform[i]) * t;
+		blend.modelview[i] = before.modelview[i] + (now.modelview[i] - before.modelview[i]) * t;
+	}
+	blend
+}
+
+/// How far one draw's blend is from being a rigid move, as a fraction.
+///
+/// A blend of two rigid moves is not itself rigid: its basis vectors come out shorter than
+/// they went in, in proportion to how far apart the two rotations were. On a character whose
+/// limbs swing between frames that is a mesh squashed along one axis, which is what a
+/// blended frame looking broken is. This is the fraction by which the shorter of the two
+/// blended axes has shrunk, so the number to watch is the largest one a frame produces.
+fn blend_shear(before: &Uniforms, now: &Uniforms, t: f32) -> f64 {
+	let mut worst = 0.0f64;
+	for row in 0..3 {
+		for column in 0..3 {
+			let index = row * 4 + column;
+			let blended = before.modelview[index] as f64
+				+ (now.modelview[index] as f64 - before.modelview[index] as f64) * t as f64;
+			let original = now.modelview[index] as f64;
+			if original.abs() > 1e-6 {
+				worst = worst.max(((blended - original) / original).abs());
+			}
+		}
+	}
+	worst
 }
 
 /// The uniform block for a frame's draws, each at its own dynamic-offset slot.
@@ -255,6 +280,9 @@ pub struct Gfx {
 	/// Whether the frame before this one drew the same things in the same order, which is
 	/// what makes the two comparable draw by draw.
 	previous_matched: bool,
+	/// What each draw was, so that a draw can be matched to the same draw a frame before.
+	/// The count lining up is not enough: an effect appearing shifts everything after it.
+	previous_draws: Vec<(u32, u32, usize)>,
 	/// Texture parameters that arrived before their texture was uploaded, which the
 	/// font atlas does by setting the wrap and then uploading.
 	pending_parameters: Vec<(usize, Enum, Enum)>,
@@ -508,6 +536,7 @@ impl Gfx {
 			uniforms: Vec::new(),
 			previous_uniforms: Vec::new(),
 			previous_matched: false,
+			previous_draws: Vec::new(),
 			pending_parameters: Vec::new(),
 		})
 	}
@@ -665,6 +694,17 @@ impl Gfx {
 		// things, or drew them in a different order, has nothing to be interpolated with.
 		self.previous_matched = self.previous_uniforms.len() == self.uniforms.len();
 		self.previous_uniforms.clone_from(&self.uniforms);
+		self.previous_draws.clear();
+		self.previous_draws
+			.extend(self.cmds.iter().filter_map(|cmd| match cmd {
+				Cmd::Draw {
+					vertex_offset,
+					vertex_count,
+					texture,
+					..
+				} => Some((*vertex_offset, *vertex_count, *texture)),
+				Cmd::Clear(_) => None,
+			}));
 
 		// Drawn, not shown: the host decides when the display gets a frame, and it may want
 		// one between this step and the next.
@@ -711,7 +751,45 @@ impl Gfx {
 		}
 		let t = t.clamp(0.0, 1.0);
 
-		let blended = blend_uniforms(&self.previous_uniforms, &self.uniforms, t);
+		// A draw is only blended with the frame before it if it is the same draw: same
+		// geometry, same texture, same place in the list. Anything else and the two matrices
+		// belong to different things, so the blend places a mesh between two places it has
+		// never been.
+		let draws: Vec<(u32, u32, usize)> = self
+			.cmds
+			.iter()
+			.filter_map(|cmd| match cmd {
+				Cmd::Draw {
+					vertex_offset,
+					vertex_count,
+					texture,
+					..
+				} => Some((*vertex_offset, *vertex_count, *texture)),
+				Cmd::Clear(_) => None,
+			})
+			.collect();
+
+		let mut mismatched = 0;
+		let mut worst_shear = 0.0f64;
+		let blended: Vec<Uniforms> = self
+			.uniforms
+			.iter()
+			.zip(self.previous_uniforms.iter())
+			.enumerate()
+			.map(|(index, (now, before))| {
+				if draws.get(index) != self.previous_draws.get(index) || index >= draws.len() {
+					mismatched += 1;
+					return *now;
+				}
+				let shear = blend_shear(before, now, t);
+				worst_shear = worst_shear.max(shear);
+				blend_one(before, now, t)
+			})
+			.collect();
+		if mismatched > 0 {
+			crate::trace::unmatched_draws(mismatched);
+		}
+		crate::trace::blend_shear(worst_shear);
 
 		if let Some(block) = pack_uniforms(&blended, self.uniform_stride as usize) {
 			self.queue.write_buffer(&self.uniform_buffer, 0, &block);
