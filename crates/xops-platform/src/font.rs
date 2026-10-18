@@ -82,7 +82,7 @@ impl TextRenderer {
 		let mut tried = Vec::new();
 
 		for path in CANDIDATES {
-			let bytes = match std::fs::read(path) {
+			let bytes = match crate::fs::read_file(path) {
 				Ok(bytes) => bytes,
 				Err(e) => {
 					tried.push(format!("{path} ({e})"));

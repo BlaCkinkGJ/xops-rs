@@ -1875,7 +1875,6 @@ mod tests {
 	use super::*;
 	use crate::core::degree_to_radian;
 	use crate::datafile::TOTAL_BLOCKTEXTURE;
-	use std::fs;
 	use std::path::PathBuf;
 
 	// --- helpers ---------------------------------------------------------
@@ -1937,7 +1936,7 @@ mod tests {
 		// The name is per test: cargo runs the tests of a crate at once, and a shared
 		// path would let one test read a file another is still writing.
 		let path = temp_path(name);
-		fs::write(&path, bd1_image(count)).expect("write temp map");
+		xops_platform::fs::write_file(&path, &bd1_image(count)).expect("write temp map");
 
 		let mut blocks = BlockDataInterface::new();
 		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
@@ -2015,7 +2014,7 @@ mod tests {
 
 		// An empty map has no blocks to build.
 		let path = temp_path("empty.bd1");
-		fs::write(&path, bd1_image(0)).expect("write temp map");
+		xops_platform::fs::write_file(&path, &bd1_image(0)).expect("write temp map");
 		let mut empty = BlockDataInterface::new();
 		empty.load_file_data(path.to_string_lossy().as_bytes());
 		let mut coll = Collision::new();
@@ -2198,7 +2197,7 @@ mod tests {
 		}
 
 		let path = temp_path("plate.bd1");
-		fs::write(&path, &image).expect("write temp map");
+		xops_platform::fs::write_file(&path, &image).expect("write temp map");
 		let mut blocks = BlockDataInterface::new();
 		blocks.load_file_data(path.to_string_lossy().as_bytes());
 		blocks.calculation_blockdata(false);

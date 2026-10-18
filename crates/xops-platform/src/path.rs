@@ -21,7 +21,7 @@ use std::path::{Component, Path, PathBuf};
 /// its error message stay the ones it would have produced. An unmatched component is not
 /// an error here: this only ever turns a missing path into an existing one.
 pub fn resolve_case_insensitive(path: &Path) -> PathBuf {
-	if path.exists() {
+	if crate::fs::exists(path) {
 		return path.to_path_buf();
 	}
 
@@ -39,7 +39,7 @@ pub fn resolve_case_insensitive(path: &Path) -> PathBuf {
 			}
 			Component::Normal(name) => {
 				let candidate = resolved.join(name);
-				if candidate.exists() {
+				if crate::fs::exists(&candidate) {
 					resolved = candidate;
 					continue;
 				}
@@ -54,15 +54,10 @@ pub fn resolve_case_insensitive(path: &Path) -> PathBuf {
 					resolved.clone()
 				};
 				let wanted = name.to_string_lossy().to_lowercase();
-				let found = std::fs::read_dir(&directory)
+				let found = crate::fs::read_dir_names(&directory)
 					.ok()
-					.and_then(|entries| {
-						entries
-							.filter_map(Result::ok)
-							.find(|entry| {
-								entry.file_name().to_string_lossy().to_lowercase() == wanted
-							})
-							.map(|entry| entry.file_name())
+					.and_then(|names| {
+						names.into_iter().find(|entry| entry.to_lowercase() == wanted)
 					});
 				match found {
 					Some(actual) => resolved.push(actual),
@@ -112,8 +107,8 @@ mod tests {
 	/// would be asserting against a filesystem that already agreed with them.
 	fn filesystem_is_case_sensitive(dir: &Path) -> bool {
 		let lower = dir.join("case-probe");
-		std::fs::write(&lower, b"x").expect("write the probe");
-		let sensitive = !dir.join("CASE-PROBE").exists();
+		crate::fs::write_file(&lower, b"x").expect("write the probe");
+		let sensitive = !crate::fs::exists(dir.join("CASE-PROBE"));
 		let _ = std::fs::remove_file(&lower);
 		sensitive
 	}
@@ -122,7 +117,7 @@ mod tests {
 	fn an_exact_path_is_returned_untouched() {
 		let dir = TempDir::new("exact");
 		let file = dir.path().join("kabe.bmp");
-		std::fs::write(&file, b"x").expect("write");
+		crate::fs::write_file(&file, b"x").expect("write");
 		assert_eq!(resolve_case_insensitive(&file), file);
 	}
 
@@ -135,7 +130,7 @@ mod tests {
 			eprintln!("skipping: this filesystem already ignores case, so there is nothing to resolve");
 			return;
 		}
-		std::fs::write(dir.path().join("kabe.bmp"), b"x").expect("write");
+		crate::fs::write_file(dir.path().join("kabe.bmp"), b"x").expect("write");
 
 		let resolved = resolve_case_insensitive(&dir.path().join("KABE.BMP"));
 		assert_eq!(resolved, dir.path().join("kabe.bmp"));
@@ -150,7 +145,7 @@ mod tests {
 			return;
 		}
 		std::fs::create_dir_all(dir.path().join("data/map0")).expect("mkdir");
-		std::fs::write(dir.path().join("data/map0/kabe.bmp"), b"x").expect("write");
+		crate::fs::write_file(dir.path().join("data/map0/kabe.bmp"), b"x").expect("write");
 
 		let asked = dir.path().join("DATA/Map0/Kabe.BMP");
 		let resolved = resolve_case_insensitive(&asked);
@@ -205,7 +200,7 @@ mod tests {
 			eprintln!("skipping: this filesystem distinguishes case, so the other tests cover it");
 			return;
 		}
-		std::fs::write(dir.path().join("kabe.bmp"), b"x").expect("write");
+		crate::fs::write_file(dir.path().join("kabe.bmp"), b"x").expect("write");
 
 		let asked = dir.path().join("KABE.BMP");
 		assert!(asked.is_file(), "the premise: the filesystem matched it already");

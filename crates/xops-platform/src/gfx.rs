@@ -234,26 +234,85 @@ impl Gfx {
 			None => None,
 		};
 
-		let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-			power_preference: wgpu::PowerPreference::HighPerformance,
-			compatible_surface: surface.as_ref(),
-			force_fallback_adapter: false,
-		}))
-		.ok_or_else(|| "no suitable adapter".to_string())?;
+		let (adapter, device, queue) = pollster::block_on(Self::request(instance, surface.as_ref()))?;
+		Self::build(
+			instance,
+			surface,
+			adapter,
+			device,
+			queue,
+			width,
+			height,
+			headless_format,
+		)
+	}
 
-		let (device, queue) = pollster::block_on(adapter.request_device(
-			&wgpu::DeviceDescriptor {
-				label: Some("xops"),
-				required_features: wgpu::Features::empty(),
-				required_limits: wgpu::Limits::default(),
-				// The device must report failures: a dropped draw is otherwise silent,
-				// and that costs an afternoon every time.
-				memory_hints: wgpu::MemoryHints::default(),
-			},
-			None,
-		))
-		.map_err(|e| format!("request_device: {e}"))?;
+	/// The same renderer for a page's canvas, which is what a browser build has instead of
+	/// a window.
+	///
+	/// Async because the two requests below cannot be blocked on there: the browser answers
+	/// them on its own schedule. Nothing after them waits on anything, which is why this is
+	/// the only part of the renderer that cannot be called from ordinary code.
+	#[cfg(target_arch = "wasm32")]
+	pub async fn new_web(
+		instance: &wgpu::Instance,
+		canvas: web_sys::HtmlCanvasElement,
+		width: u32,
+		height: u32,
+	) -> Result<Gfx, String> {
+		let surface = Some(
+			instance
+				.create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+				.map_err(|e| format!("create_surface: {e}"))?,
+		);
+		let (adapter, device, queue) = Self::request(instance, surface.as_ref()).await?;
+		Self::build(instance, surface, adapter, device, queue, width, height, None)
+	}
 
+	/// Asks for the adapter and the device. The one place the renderer waits.
+	async fn request(
+		instance: &wgpu::Instance,
+		surface: Option<&wgpu::Surface<'_>>,
+	) -> Result<(wgpu::Adapter, wgpu::Device, wgpu::Queue), String> {
+		let adapter = instance
+			.request_adapter(&wgpu::RequestAdapterOptions {
+				power_preference: wgpu::PowerPreference::HighPerformance,
+				compatible_surface: surface,
+				force_fallback_adapter: false,
+			})
+			.await
+			.ok_or_else(|| "no suitable adapter".to_string())?;
+
+		let (device, queue) = adapter
+			.request_device(
+				&wgpu::DeviceDescriptor {
+					label: Some("xops"),
+					required_features: wgpu::Features::empty(),
+					required_limits: wgpu::Limits::default(),
+					// The device must report failures: a dropped draw is otherwise silent,
+					// and that costs an afternoon every time.
+					memory_hints: wgpu::MemoryHints::default(),
+				},
+				None,
+			)
+			.await
+			.map_err(|e| format!("request_device: {e}"))?;
+
+		Ok((adapter, device, queue))
+	}
+
+	/// Everything the renderer is built out of, once the device exists.
+	#[allow(clippy::too_many_arguments)]
+	fn build(
+		_instance: &wgpu::Instance,
+		surface: Option<wgpu::Surface<'static>>,
+		adapter: wgpu::Adapter,
+		device: wgpu::Device,
+		queue: wgpu::Queue,
+		width: u32,
+		height: u32,
+		headless_format: Option<wgpu::TextureFormat>,
+	) -> Result<Gfx, String> {
 		device.on_uncaptured_error(Box::new(|error| {
 			eprintln!("wgpu error: {error}");
 		}));

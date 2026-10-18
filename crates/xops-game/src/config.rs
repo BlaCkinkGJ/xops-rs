@@ -137,7 +137,7 @@ impl Config {
 		let path = path.as_ref();
 		log.write_log(LOG_LOAD, b"Config File", path.as_os_str().as_encoded_bytes());
 
-		let Ok(data) = std::fs::read(path) else {
+		let Ok(data) = xops_platform::fs::read_file(path) else {
 			return 1;
 		};
 
@@ -152,7 +152,7 @@ impl Config {
 		let path = path.as_ref();
 		log.write_log(LOG_LOAD, b"Config File (Save)", path.as_os_str().as_encoded_bytes());
 
-		if std::fs::write(path, self.save_to_bytes()).is_err() {
+		if xops_platform::fs::write_file(path, &self.save_to_bytes()).is_err() {
 			return 1;
 		}
 
@@ -464,7 +464,7 @@ impl Config {
 		let path = path.as_ref();
 
 		// The file is not needed if it is already there.
-		if std::fs::metadata(path).is_ok() {
+		if xops_platform::fs::exists(path) {
 			return false;
 		}
 
@@ -511,7 +511,7 @@ impl Config {
 			MasterVolume = 1.0\n\
 			\n";
 
-		if std::fs::write(path, contents.as_bytes()).is_err() {
+		if xops_platform::fs::write_file(path, contents.as_bytes()).is_err() {
 			return false;
 		}
 
@@ -831,7 +831,7 @@ mod tests {
 		config.set_player_name(b"nametest");
 
 		assert_eq!(config.save_file(&path, &mut log), 0);
-		assert_eq!(std::fs::metadata(&path).unwrap().len(), CONFIG_FILE_SIZE as u64);
+		assert_eq!(xops_platform::fs::read_file(&path).unwrap().len() as u64, CONFIG_FILE_SIZE as u64);
 
 		let mut loaded = Config::new();
 		assert_eq!(loaded.load_file(&path, &mut log), 0);
@@ -897,7 +897,7 @@ mod tests {
 		assert_eq!(loaded.get_volume(), 1.0);
 
 		// The written file is the one the upstream writes, comments and all.
-		let text = std::fs::read_to_string(&path).unwrap();
+		let text = String::from_utf8(xops_platform::fs::read_file(&path).unwrap()).unwrap();
 		assert!(text.starts_with("[Game]\n;Game language.\n"));
 		assert!(text.contains("[Graphics]\n;WindowSize\n"));
 		// The two entries the upstream leaves commented out are not in the file.
@@ -930,11 +930,11 @@ mod tests {
 
 		let mut config = Config::new();
 
-		std::fs::write(&path, "[Sounds]\nMasterVolume = 4.5\n").unwrap();
+		xops_platform::fs::write_file(&path, b"[Sounds]\nMasterVolume = 4.5\n").unwrap();
 		config.load_ext_file(&path, &mut log);
 		assert_eq!(config.get_volume(), 1.0);
 
-		std::fs::write(&path, "[Sounds]\nMasterVolume = -2.0\n").unwrap();
+		xops_platform::fs::write_file(&path, b"[Sounds]\nMasterVolume = -2.0\n").unwrap();
 		config.load_ext_file(&path, &mut log);
 		assert_eq!(config.get_volume(), 0.0);
 
@@ -963,7 +963,7 @@ mod tests {
 
 		let mut config = Config::new();
 		for (mode, width, height) in expected {
-			std::fs::write(&path, format!("[Graphics]\nWindowSize = {mode}\n")).unwrap();
+			xops_platform::fs::write_file(&path, format!("[Graphics]\nWindowSize = {mode}\n").as_bytes()).unwrap();
 			config.load_ext_file(&path, &mut log);
 			assert_eq!(config.get_screen_width(), width, "mode {mode}");
 			assert_eq!(config.get_screen_height(), height, "mode {mode}");

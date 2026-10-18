@@ -12,7 +12,6 @@
 //! the distance attenuation is measured from, the master volume, and the two pieces of
 //! arithmetic that turn a distance into a volume.
 
-use std::fs;
 use std::path::Path;
 
 use xops_platform::sound::SoundOutput;
@@ -146,7 +145,7 @@ impl SoundControl {
 			return -1;
 		};
 
-		let Ok(data) = fs::read(path) else {
+		let Ok(data) = xops_platform::fs::read_file(path) else {
 			return -1;
 		};
 

@@ -3779,7 +3779,7 @@ mod tests {
 		image.extend_from_slice(&[0; 4]);
 
 		let path = temp_path(name);
-		std::fs::write(&path, image).expect("write the temp map");
+		xops_platform::fs::write_file(&path, &image).expect("write the temp map");
 
 		let mut blocks = BlockDataInterface::new();
 		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
@@ -3841,7 +3841,7 @@ mod tests {
 
 	fn point_data(name: &str, points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
 		let path = temp_path(name);
-		std::fs::write(&path, pd1_image(points)).expect("write temp point file");
+		xops_platform::fs::write_file(&path, &pd1_image(points)).expect("write temp point file");
 		let mut data = PointDataInterface::new();
 		assert_eq!(
 			data.load_file_data(path.to_string_lossy().as_bytes()),

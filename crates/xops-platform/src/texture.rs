@@ -104,7 +104,7 @@ pub fn check_texture_file_type_flag(data: &[u8], nowformat: i32) -> i32 {
 /// here is upstream's `return false` from a loader, which makes `LoadTexture` give up and
 /// the texture count as missing.
 pub fn decode(path: &Path, format: i32, black_transparent: bool) -> Result<DecodedTexture, String> {
-	let buf = std::fs::read(crate::path::resolve_case_insensitive(path))
+	let buf = crate::fs::read_file(crate::path::resolve_case_insensitive(path))
 		.map_err(|e| format!("{}: {e}", path.display()))?;
 
     match format {
@@ -925,7 +925,7 @@ mod tests {
     #[test]
     fn decode_reads_a_file_and_reports_unknown_formats() {
         let path = std::env::temp_dir().join("xops_texture_decode_test.bmp");
-        std::fs::write(&path, bmp_paletted(1, 1, 8, &[vec![9]])).unwrap();
+        crate::fs::write_file(&path, &bmp_paletted(1, 1, 8, &[vec![9]])).unwrap();
 
         let t = decode(&path, FORMAT_BMP, false).unwrap();
         assert_eq!(pixel(&t, 0, 0), [9, 9, 9, 255]);

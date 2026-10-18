@@ -9,6 +9,7 @@ pub mod math;
 
 pub mod font;
 pub mod frame;
+pub mod fs;
 pub mod gfx;
 pub mod host;
 pub mod input;

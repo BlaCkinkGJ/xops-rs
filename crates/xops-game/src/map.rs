@@ -13,7 +13,6 @@
 //! white texture that multiplies the vertex colour by one, which is what
 //! `glDisable(GL_TEXTURE_2D)` did.
 
-use std::io::Read;
 use std::path::Path;
 
 use xops_platform::gfx::Vertex;
@@ -44,8 +43,9 @@ fn cstr(bytes: &[u8]) -> &[u8] {
 /// from whatever happened to be there. Zeros match nothing, which fails the load.
 fn file_head(path: &Path) -> [u8; 4] {
 	let mut head = [0u8; 4];
-	if let Ok(mut file) = std::fs::File::open(path) {
-		let _ = file.read(&mut head);
+	if let Ok(data) = xops_platform::fs::read_file(path) {
+		let n = data.len().min(head.len());
+		head[..n].copy_from_slice(&data[..n]);
 	}
 	head
 }

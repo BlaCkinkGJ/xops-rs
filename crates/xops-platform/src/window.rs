@@ -51,6 +51,14 @@ struct Host<A: App> {
 	input: Input,
 	next_frame: Instant,
 	frames: u64,
+	/// The window attributes, which a browser build has to hand over ready made because the
+	/// canvas comes from the page rather than from the platform.
+	#[cfg(target_arch = "wasm32")]
+	attributes: Option<WindowAttributes>,
+	/// The renderer, made before the loop starts. Requesting a device needs an await, and
+	/// nothing inside the event loop can wait for one.
+	#[cfg(target_arch = "wasm32")]
+	gfx: Option<Gfx>,
 }
 
 impl<A: App> ApplicationHandler for Host<A> {
@@ -59,9 +67,15 @@ impl<A: App> ApplicationHandler for Host<A> {
 			return;
 		}
 
+		#[cfg(not(target_arch = "wasm32"))]
 		let attributes = WindowAttributes::default()
 			.with_title("xops")
 			.with_inner_size(winit::dpi::LogicalSize::new(640.0, 480.0));
+		#[cfg(target_arch = "wasm32")]
+		let attributes = self
+			.attributes
+			.take()
+			.expect("run_web sets the attributes before it starts the loop");
 		let window = match event_loop.create_window(attributes) {
 			Ok(window) => Arc::new(window),
 			Err(error) => {
@@ -71,25 +85,33 @@ impl<A: App> ApplicationHandler for Host<A> {
 			}
 		};
 
+		// Only the desktop builds its renderer here. The web one was built before the loop
+		// started, because the browser will not let it wait.
+		#[cfg(not(target_arch = "wasm32"))]
 		let size = window.inner_size();
-		let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-			backends: wgpu::Backends::all(),
-			..Default::default()
-		});
-		let gfx = match Gfx::new(
-			&instance,
-			Some(window.clone()),
-			size.width.max(1),
-			size.height.max(1),
-			None,
-		) {
-			Ok(gfx) => gfx,
-			Err(error) => {
-				eprintln!("renderer: {error}");
-				event_loop.exit();
-				return;
+		#[cfg(not(target_arch = "wasm32"))]
+		let gfx = {
+			let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+				backends: wgpu::Backends::all(),
+				..Default::default()
+			});
+			match Gfx::new(
+				&instance,
+				Some(window.clone()),
+				size.width.max(1),
+				size.height.max(1),
+				None,
+			) {
+				Ok(gfx) => gfx,
+				Err(error) => {
+					eprintln!("renderer: {error}");
+					event_loop.exit();
+					return;
+				}
 			}
 		};
+		#[cfg(target_arch = "wasm32")]
+		let gfx = self.gfx.take().expect("run_web builds the renderer");
 
 		window.request_redraw();
 		self.window = Some(window.clone());
@@ -148,6 +170,11 @@ impl<A: App> ApplicationHandler for Host<A> {
 		if let Some(window) = &self.window {
 			window.request_redraw();
 		}
+
+		// The desktop is told when the next frame is due so it can sleep until then. A page
+		// cannot sleep, and winit's web loop only runs a frame when the browser hands it one,
+		// so over there the loop polls and the animation callbacks are what pace it.
+		#[cfg(not(target_arch = "wasm32"))]
 		event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
 	}
 }
@@ -156,6 +183,10 @@ impl<A: App> Host<A> {
 	fn new(app: A) -> Host<A> {
 		Host {
 			app,
+			#[cfg(target_arch = "wasm32")]
+			attributes: None,
+			#[cfg(target_arch = "wasm32")]
+			gfx: None,
 			window: None,
 			input: Input::default(),
 			next_frame: Instant::now(),
@@ -165,6 +196,43 @@ impl<A: App> Host<A> {
 }
 
 /// Runs the window until the app quits or the window closes.
+/// Runs the game in a page, drawing into the canvas the page provides.
+///
+/// Separate from [`run`] because a browser will not let anything block on the device
+/// request: this is the one entry point that has to be awaited, and it makes the renderer
+/// before the event loop starts so that nothing inside the loop has to wait.
+#[cfg(target_arch = "wasm32")]
+pub async fn run_web<A: App>(
+	app: A,
+	canvas: web_sys::HtmlCanvasElement,
+) -> Result<(), String> {
+	use winit::platform::web::WindowAttributesExtWebSys;
+
+	console_error_panic_hook::set_once();
+
+	let width = canvas.width().max(1);
+	let height = canvas.height().max(1);
+	let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+		backends: wgpu::Backends::all(),
+		..Default::default()
+	});
+	let gfx = Gfx::new_web(&instance, canvas.clone(), width, height).await?;
+
+	let mut host = Host::new(app);
+	host.attributes = Some(
+		WindowAttributes::default()
+			.with_canvas(Some(canvas))
+			.with_inner_size(winit::dpi::LogicalSize::new(width, height)),
+	);
+	host.gfx = Some(gfx);
+
+	let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
+	event_loop.set_control_flow(ControlFlow::Poll);
+	event_loop
+		.run_app(&mut host)
+		.map_err(|e| format!("event loop: {e}"))
+}
+
 pub fn run<A: App>(app: A) -> Result<(), String> {
 	let event_loop = EventLoop::new().map_err(|e| format!("event loop: {e}"))?;
 	event_loop.set_control_flow(ControlFlow::Wait);

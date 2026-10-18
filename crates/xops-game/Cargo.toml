@@ -7,3 +7,6 @@ description = "The game itself: data files, collision, AI, objects, missions."
 
 [dependencies]
 xops-platform.workspace = true
+# The clock: std's is unimplemented on the web and panics, web_time is std's on the
+# desktop and performance.now there.
+web-time.workspace = true

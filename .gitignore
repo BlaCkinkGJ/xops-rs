@@ -11,3 +11,8 @@ build/
 renderer/target/
 __pycache__/
 *.pyc
+
+# The browser build's own output, which scripts/build_web.sh writes beside the data.
+web/xops.js
+web/xops_bg.wasm
+web/data/index.json

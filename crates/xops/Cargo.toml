@@ -9,3 +9,9 @@ description = "OpenXOPS as a standalone cross-platform game."
 xops-game.workspace = true
 xops-platform.workspace = true
 wgpu.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+web-sys.workspace = true

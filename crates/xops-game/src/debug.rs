@@ -11,7 +11,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use web_time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// A plain note. `LOG_CHECK` upstream.
 pub const LOG_CHECK: i32 = 0;
@@ -362,7 +362,7 @@ mod tests {
 			assert!(!log.write_log(LOG_CHECK, b"BD1", b"data/block.dat"));
 		}
 
-		let file = std::fs::read(&path).unwrap();
+		let file = xops_platform::fs::read_file(&path).unwrap();
 		let text = String::from_utf8_lossy(&file);
 
 		assert!(text.contains("<b>OpenXOPS 1.080 Debug Log</b><br>\n"));
@@ -460,7 +460,7 @@ mod tests {
 			assert!(!log.write_log_id(LOG_COMPLETE, b"Model", 42));
 		}
 
-		let file = std::fs::read(&path).unwrap();
+		let file = xops_platform::fs::read_file(&path).unwrap();
 		assert!(contains(&file, b"<td>Model</td><td>ID\x81\x4642</td>"));
 
 		let _ = std::fs::remove_file(&path);
@@ -476,7 +476,7 @@ mod tests {
 			assert!(!log.write_log(LOG_CHECK, b"Directory", b"data"));
 		}
 
-		let file = std::fs::read(&path).unwrap();
+		let file = xops_platform::fs::read_file(&path).unwrap();
 
 		// The owed error lands before the write that came after it.
 		let load = index_of(&file, b"<td width=100>BD1</td>");
@@ -499,7 +499,7 @@ mod tests {
 			assert!(!log.write_log(LOG_CHECK, b"Directory", b"data"));
 		}
 
-		let file = std::fs::read(&path).unwrap();
+		let file = xops_platform::fs::read_file(&path).unwrap();
 		assert!(!contains(&file, b"Failed"));
 
 		let _ = std::fs::remove_file(&path);

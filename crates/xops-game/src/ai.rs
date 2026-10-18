@@ -2957,7 +2957,7 @@ mod tests {
 	/// A map holding one unit cube, loaded and prepared the way a mission load leaves it.
 	fn cube_map(name: &str, ox: f32, oy: f32, oz: f32) -> (BlockDataInterface, Collision) {
 		let path = temp_path(name);
-		fs::write(&path, cube_image(ox, oy, oz)).expect("write the temp map");
+		xops_platform::fs::write_file(&path, &cube_image(ox, oy, oz)).expect("write the temp map");
 
 		let mut blocks = BlockDataInterface::new();
 		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
@@ -2985,7 +2985,7 @@ mod tests {
 	/// Loads a point data file the way a mission load does.
 	fn load_points(name: &str, points: &[(f32, f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
 		let path = temp_path(name);
-		fs::write(&path, pd1_image(points)).expect("write the temp points");
+		xops_platform::fs::write_file(&path, &pd1_image(points)).expect("write the temp points");
 
 		let mut data = PointDataInterface::new();
 		assert_eq!(data.load_file_data(path.to_string_lossy().as_bytes()), 0);

@@ -8,8 +8,6 @@
 //! writes past a fixed buffer the port clamps, so every such case is noted at the site.
 //! Strings stay bytes because the texture font indexes glyphs by byte value.
 
-use std::fs;
-
 use xops_platform::path::resolve_case_insensitive;
 use std::path::{Path, PathBuf};
 
@@ -201,7 +199,7 @@ pub fn path_from_bytes(fname: &[u8]) -> PathBuf {
 fn read_file(fname: &[u8]) -> Option<Vec<u8>> {
 	// The game's data names its files in whatever case it was authored with, which is not
 	// necessarily the case on disk. See `xops_platform::path`.
-	fs::read(resolve_case_insensitive(&path_from_bytes(fname))).ok()
+	xops_platform::fs::read_file(resolve_case_insensitive(&path_from_bytes(fname))).ok()
 }
 
 /// Takes at most `n` bytes, ending the cursor at the end of the data.
@@ -1342,11 +1340,11 @@ impl AddonList {
 	/// The upstream pattern "*.mif" is matched by the Windows API, which does not
 	/// distinguish case, so neither does this.
 	fn get_mif_list(&mut self, dir: &[u8]) {
-		let Ok(entries) = fs::read_dir(resolve_case_insensitive(&path_from_bytes(dir))) else {
+		let Ok(entries) = xops_platform::fs::read_dir_names(resolve_case_insensitive(&path_from_bytes(dir))) else {
 			return;
 		};
-		for entry in entries.flatten() {
-			let name = entry.file_name().to_string_lossy().into_owned().into_bytes();
+		for entry in entries {
+			let name = entry.into_bytes();
 			if !check_file_extension(&name, b".mif") {
 				continue;
 			}
@@ -1457,7 +1455,7 @@ impl INIFileInterface {
 		if self.inifp.is_some() {
 			return true;
 		}
-		match fs::read(resolve_case_insensitive(path)) {
+		match xops_platform::fs::read_file(resolve_case_insensitive(path)) {
 			Ok(bytes) => {
 				self.inifp = Some(bytes);
 				false
@@ -1703,7 +1701,7 @@ pub fn check_file_extension(filepath: &[u8], checkstr: &[u8]) -> bool {
 
 /// `CheckDirectory`: does the directory exist?
 pub fn check_directory(dir: &[u8]) -> bool {
-	fs::metadata(resolve_case_insensitive(&path_from_bytes(dir))).is_ok()
+	xops_platform::fs::exists(resolve_case_insensitive(&path_from_bytes(dir)))
 }
 
 #[cfg(test)]
@@ -1719,7 +1717,7 @@ mod tests {
 
 	fn temp_write(name: &str, bytes: &[u8]) -> Vec<u8> {
 		let path = temp_path(name);
-		fs::write(&path, bytes).expect("write temp file");
+		xops_platform::fs::write_file(&path, bytes).expect("write temp file");
 		path.to_string_lossy().into_owned().into_bytes()
 	}
 
@@ -2222,11 +2220,11 @@ mod tests {
 	#[test]
 	fn addon_list_collects_and_sorts_the_directory() {
 		let dir = temp_path("addons");
-		let _ = fs::remove_dir_all(&dir);
-		fs::create_dir_all(&dir).expect("create temp dir");
-		fs::write(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
-		fs::write(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
-		fs::write(dir.join("ignored.pd1"), b"nope").unwrap();
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).expect("create temp dir");
+		xops_platform::fs::write_file(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(dir.join("ignored.pd1"), b"nope").unwrap();
 
 		let dir_bytes = dir.to_string_lossy().into_owned().into_bytes();
 		let mut addons = AddonList::new();
@@ -2244,7 +2242,7 @@ mod tests {
 		assert!(addons.get_filename(MAX_ADDONLIST as i32).is_none());
 
 		assert_eq!(addons.load_file_data(b"no_such_dir"), 0);
-		let _ = fs::remove_dir_all(&dir);
+		let _ = std::fs::remove_dir_all(&dir);
 	}
 
 	// --- INI -------------------------------------------------------------
@@ -2269,7 +2267,7 @@ mod tests {
 	#[test]
 	fn ini_int_reads_the_section_and_key() {
 		let path = temp_path("config.ini");
-		fs::write(&path, ini_bytes()).expect("write ini");
+		xops_platform::fs::write_file(&path, &ini_bytes()).expect("write ini");
 		let mut ini = INIFileInterface::new();
 		assert!(!ini.load_ini_file(&path), "load should succeed");
 
@@ -2288,7 +2286,7 @@ mod tests {
 	#[test]
 	fn ini_reports_a_missing_key_and_a_missing_file() {
 		let path = temp_path("errors.ini");
-		fs::write(&path, ini_bytes()).expect("write ini");
+		xops_platform::fs::write_file(&path, &ini_bytes()).expect("write ini");
 		let mut error = 0;
 		let mut ini = INIFileInterface::new();
 
@@ -2314,7 +2312,7 @@ mod tests {
 	#[test]
 	fn ini_float_and_bool() {
 		let path = temp_path("types.ini");
-		fs::write(&path, ini_bytes()).expect("write ini");
+		xops_platform::fs::write_file(&path, &ini_bytes()).expect("write ini");
 		let mut ini = INIFileInterface::new();
 		ini.load_ini_file(&path);
 		let mut error = 0;
@@ -2338,7 +2336,7 @@ mod tests {
 	#[test]
 	fn ini_string_keeps_quoted_spaces() {
 		let path = temp_path("strings.ini");
-		fs::write(&path, ini_bytes()).expect("write ini");
+		xops_platform::fs::write_file(&path, &ini_bytes()).expect("write ini");
 		let mut ini = INIFileInterface::new();
 		ini.load_ini_file(&path);
 
@@ -2358,7 +2356,7 @@ mod tests {
 		long_ini.extend_from_slice(b"Long = ");
 		long_ini.extend_from_slice(long);
 		long_ini.push(b'\n');
-		fs::write(&path, long_ini).unwrap();
+		xops_platform::fs::write_file(&path, &long_ini).unwrap();
 		ini.release_ini_file();
 		ini.load_ini_file(&path);
 		assert_eq!(ini.get_ini_file_string(b"Sounds", b"Long", b"").len(), long.len());
@@ -2370,7 +2368,7 @@ mod tests {
 	#[test]
 	fn ini_without_a_section_stops_at_the_first_header() {
 		let path = temp_path("nosection.ini");
-		fs::write(&path, b"Top = 4\n[Game]\nLanguage = 1\n").expect("write ini");
+		xops_platform::fs::write_file(&path, b"Top = 4\n[Game]\nLanguage = 1\n").expect("write ini");
 		let mut ini = INIFileInterface::new();
 		ini.load_ini_file(&path);
 

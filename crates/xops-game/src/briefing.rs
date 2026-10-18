@@ -490,7 +490,7 @@ mod tests {
 			std::process::id(),
 			name
 		));
-		std::fs::write(&path, bytes).unwrap();
+		xops_platform::fs::write_file(&path, bytes).unwrap();
 		path.to_string_lossy().into_owned().into_bytes()
 	}
 

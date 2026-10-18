@@ -433,7 +433,6 @@ impl Default for EventControl {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::fs;
 	use std::path::PathBuf;
 
 	// --- point data ------------------------------------------------------
@@ -457,7 +456,7 @@ mod tests {
 	fn load_points(name: &str, points: &[(f32, f32, f32, i8, i8, i8, i8)]) -> PointDataInterface {
 		let path: PathBuf =
 			std::env::temp_dir().join(format!("xops_event_{}_{}", std::process::id(), name));
-		fs::write(&path, pd1_image(points)).expect("write the point file");
+		xops_platform::fs::write_file(&path, &pd1_image(points)).expect("write the point file");
 
 		let mut data = PointDataInterface::new();
 		assert_eq!(

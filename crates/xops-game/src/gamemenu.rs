@@ -2451,8 +2451,8 @@ mod tests {
 		let dir = std::env::temp_dir().join(format!("xops_gamemenu_{}_{}", std::process::id(), name));
 		let _ = std::fs::remove_dir_all(&dir);
 		std::fs::create_dir_all(&dir).expect("create temp dir");
-		std::fs::write(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
-		std::fs::write(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(dir.join("b.mif"), b"BETA\nBeta\nb.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
+		xops_platform::fs::write_file(dir.join("a.MIF"), b"alpha\nAlpha\na.bd1\np.pd1\n0\n0\n!\n!\n!\n").unwrap();
 		dir
 	}
 

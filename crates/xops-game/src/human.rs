@@ -2468,7 +2468,6 @@ fn fall_damage_ramp(move_y: f32) -> i32 {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::fs;
 	use std::path::PathBuf;
 
 	use xops_platform::gfx::Gfx;
@@ -2595,7 +2594,7 @@ mod tests {
 	/// One unit cube, loaded and prepared the way a mission load leaves the map.
 	fn cube_map(name: &str) -> (BlockDataInterface, Collision) {
 		let path = temp_path(name);
-		fs::write(&path, bd1_image()).expect("write the temp map");
+		xops_platform::fs::write_file(&path, &bd1_image()).expect("write the temp map");
 
 		let mut blocks = BlockDataInterface::new();
 		assert_eq!(blocks.load_file_data(path.to_string_lossy().as_bytes()), 0);
