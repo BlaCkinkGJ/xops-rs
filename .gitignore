@@ -4,13 +4,7 @@
 /config.dat
 /config-openxops.ini
 
-# The browser build's output, which scripts/build_web.sh writes beside the data.
-/xops.js
-/xops_bg.wasm
-
 /target/
-vendor/target/
-renderer/target/
 # macOS writes these wherever a directory is opened in Finder.
 .DS_Store
 __pycache__/

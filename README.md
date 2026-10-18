@@ -163,6 +163,13 @@ partway to the one before it, with each draw's matrices blended: the display get
 a frame every refresh and the simulation stays at its own rate. `XOPS_INTERPOLATE=0`
 turns that off, which leaves exactly the frames the game makes.
 
+The host paces those frames itself rather than leaving it to the display, so vsync
+is off by default: that is what the engines do at a fixed target rate, and here it
+is the smoother of the two by measurement -- fifty-five to fifty-eight frames a
+second against thirty-nine to forty-two, with a much steadier gap between them. It
+can tear, and `XOPS_VSYNC=1` hands the pacing back to the display's own
+synchronisation for anyone who would rather have that.
+
 `XOPS_TRACE=1` prints a line a second with the frame rate, the step's cost, the
 mouse's movement as the platform received it and as the game took it, the player's
 view angle, and where the HUD weapon was placed.
@@ -206,3 +213,11 @@ paths, which all three platforms have.
 3-clause BSD, from the OpenXOPS Project. See [LICENSE.md](LICENSE.md): the full
 text, the third-party parts that belong to nine-two and TENKUU, and the rule that
 the original game's graphics data must not be redistributed.
+
+**No game data is in this repository, and none has ever been committed.** The tree
+holds source, the two example missions and two generated test fixtures; every other
+file is text. `data/` is kept out by `.gitignore`, and no graphic, sound or mission
+file of the original has been added in any commit of this repository's history --
+checked by name and by extension, not assumed. `vendor/openxops/` is upstream's
+source, which is BSD licensed; the libjpeg, libpng and zlib copies its archive
+bundles are not here, because nothing in this port uses them.

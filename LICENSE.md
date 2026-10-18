@@ -10,8 +10,8 @@ OpenXOPS name.
 * `vendor/openxops/` is the OpenXOPS 1.080 source code, with the patches listed in
   `README.md` applied and the Japanese comments translated to English (comments
   only, no code or string literals were touched).
-* `crates/`, `xops.html` and `scripts/` are this port's own code, and none of it comes from
-the original.
+* `crates/` and `missions/` are this port's own code, and none of it comes from the
+original.
 
 ## OpenXOPS: 3-clause BSD
 
@@ -55,19 +55,23 @@ per-file banner the upstream sources already carry
 Copyright (c) 2014-2023, OpenXOPS Project / [-_-;](mikan) All rights reserved.
 ```
 
-is retained in every file. The port's own edits to those files are additionally
-marked in the code with `#ifdef __EMSCRIPTEN__` and described in `README.md`.
+is retained in every file. The port's own edits to those files are marked in the
+code with `#ifdef __EMSCRIPTEN__`, left over from a browser build this port no
+longer has; a compiler that does not define `__EMSCRIPTEN__`, which is all of
+them here, sees the upstream code.
 
 ## This port
 
-`crates/`, `xops.html`, `scripts/`, `missions/` and this file are released
+`crates/`, `missions/` and this file are released
 under the same 3-clause BSD terms, copyright (c) 2026 BlaCkinkGJ and contributors
 of this port.
 
 ## Game data is not included
 
 This repository ships **no** game data: `data/` is git-ignored and the
-build is built without it. The graphics data of the original game is a separate
+build is built without it. Neither is any of it in the repository's history --
+no graphic, sound or mission file of the original has ever been committed, and
+`.gitignore` keeps the whole `data/` directory out. The graphics data of the original game is a separate
 work, and the upstream terms forbid redistributing it:
 
 * Do not bundle the *X operations* graphic data with a distribution of this port.
@@ -93,7 +97,8 @@ Those files may only be used by OpenXOPS and its derived projects, and their
 copyright notice has to be shown in the documentation of any such project.
 
 The upstream 1.080 source archive additionally bundles libjpeg, libpng and zlib
-under their own licenses. That `lib/` directory is not part of this repository.
+under their own licenses. Those copies are not part of this repository: nothing
+here links or reads them, so their notices do not have to be carried.
 
 ## Naming
 
