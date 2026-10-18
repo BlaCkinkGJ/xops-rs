@@ -290,6 +290,12 @@ impl<A: App> ApplicationHandler for Host<A> {
 				if !blended {
 					trace::presented_unblended();
 				}
+				// Slept out the rest of the refresh before asking for another frame. Asking
+				// as soon as the last one lands is measurably worse, not better: the display
+				// takes what it is given at its own refreshes, and a request that arrives on
+				// the heels of the previous one waits for the refresh after next. Measured,
+				// that is thirty-six frames a second against fifty-seven, with the wait for
+				// a display buffer more than doubled.
 				crate::host::sleep_until((now + refresh).min(self.next_frame));
 			}
 		}

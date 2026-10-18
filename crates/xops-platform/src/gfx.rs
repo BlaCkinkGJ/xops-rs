@@ -404,27 +404,37 @@ impl Gfx {
 		let surface_config = surface.as_ref().map(|surface| {
 			let caps = surface.get_capabilities(&adapter);
 
-			// Mailbox: the display takes the newest frame at each refresh and nothing waits.
+			// Mailbox first: the display takes the newest frame at each of its own
+			// refreshes and the present itself does not wait, so the loop keeps its own
+			// cadence and nothing tears. Where there is no mailbox the display's own
+			// synchronisation is what paces the present, which is Fifo and is what this
+			// machine ends up with; the loop then cannot ask for more frames than the
+			// display takes, and asking on the heels of the last one is measurably worse
+			// than sleeping out the refresh -- see the burst in `window.rs`.
 			//
-			// Both halves matter here. The loop has two jobs on one thread, the game's step
-			// and the frames drawn for the display between steps, and a present that waits for
-			// the display takes sixteen of the thirty milliseconds a step comes with -- so
-			// only one frame fits per step and the display is given 33 of the 60 it asked for.
-			// With a mailbox the present returns at once and the display picks the newest
-			// frame whenever it refreshes, which is its own cadence exactly and as even as the
-			// display is, whatever the loop is doing. Nothing tears either: a mailbox replaces
-			// the queued frame rather than swapping mid-frame.
-			//
-			// Fifo is the fallback, and behaves as that costs describes; an immediate present
-			// tears, but is at least even.
-			let present_mode = [
-				wgpu::PresentMode::Mailbox,
-				wgpu::PresentMode::Fifo,
-				wgpu::PresentMode::Immediate,
-			]
-			.into_iter()
-			.find(|mode| caps.present_modes.contains(mode))
-			.unwrap_or(wgpu::PresentMode::AutoVsync);
+			// `XOPS_VSYNC=0` puts the immediate mode first instead. That is the other way
+			// the engines do it -- vsync off with the frames paced by the application, which
+			// is Unity's `vSyncCount = 0` with a target frame rate and Unreal's `t.MaxFPS`
+			// with vsync off -- and it is offered because only the person looking at the
+			// screen can say whether the even cadence is worth the tearing.
+			let vsync = !std::env::var("XOPS_VSYNC").is_ok_and(|value| value == "0");
+			let order = if vsync {
+				[
+					wgpu::PresentMode::Mailbox,
+					wgpu::PresentMode::Fifo,
+					wgpu::PresentMode::Immediate,
+				]
+			} else {
+				[
+					wgpu::PresentMode::Immediate,
+					wgpu::PresentMode::Mailbox,
+					wgpu::PresentMode::Fifo,
+				]
+			};
+			let present_mode = order
+				.into_iter()
+				.find(|mode| caps.present_modes.contains(mode))
+				.unwrap_or(wgpu::PresentMode::AutoVsync);
 			eprintln!("xops: {width}x{height}, presenting with {present_mode:?}");
 
 			let config = wgpu::SurfaceConfiguration {
