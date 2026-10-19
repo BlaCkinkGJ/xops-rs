@@ -132,6 +132,8 @@ flowchart TB
 The split is the one the upstream is written with: everything above the platform
 layer is a translation of the original C++, file for file and function for
 function, and `PORTING.md` records how that translation is done.
+[docs/guide.md](docs/guide.md) is the way round the code: how a frame reaches the
+screen, where the renderer's seam is, and which file to open first.
 
 | Upstream | Here |
 | --- | --- |
