@@ -66,6 +66,14 @@ the two disagree.
 - A test earns its place by catching a plausible mistake. Prefer one that fails
   before the fix and passes after it, and say in the name what it pins down.
   Tests that restate the implementation are worse than no test.
+- **A code change is not finished until `README.md` and `docs/` agree with it.** They
+  are the only description a reader has of this port, so a change that leaves them
+  describing the previous behaviour is half made. The cases that catch people: a new,
+  renamed or removed option (the README's tables), a change to the frame loop, the
+  gates or what is verified (the README's Frame and Verified sections), a file or a
+  directory added, renamed or removed (`docs/guide.md`'s routes, and the layout table
+  at the top of this file), and anything that makes a sentence untrue anywhere in the
+  prose -- which is the licence rule further down applied to the rest of it.
 
 ## Traps that cost real time
 
